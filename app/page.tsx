@@ -57,10 +57,10 @@ export default function Home() {
             <Image
               src="/logo.png"
               alt="Yörünge Kurumsal Danışmanlık Eğitim"
-              width={44}
-              height={44}
+              width={52}
+              height={52}
               priority
-              className="rounded-md bg-white p-0.5"
+              className="object-contain"
             />
             <div className="leading-tight">
               <p className="font-bold tracking-tight">
@@ -86,10 +86,10 @@ export default function Home() {
           <Image
             src="/logo.png"
             alt="Yörünge"
-            width={96}
-            height={96}
+            width={156}
+            height={156}
             priority
-            className="mb-6 rounded-xl bg-white p-1 shadow-sm"
+            className="mb-6 object-contain drop-shadow-md"
           />
           <span className="mb-4 inline-flex items-center gap-2 rounded-full border bg-card px-4 py-1.5 text-sm text-muted-foreground">
             <Sun className="h-4 w-4 text-primary" />
@@ -117,6 +117,19 @@ export default function Home() {
               </Button>
             </Link>
           </div>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-muted-foreground">
+            {[
+              "EN 12464-1",
+              "CIE Overcast Sky",
+              "ASHRAE Clear Sky",
+              "Veriler tarayıcıda işlenir",
+            ].map((t, i) => (
+              <span key={t} className="flex items-center gap-5">
+                {i > 0 && <span className="text-border">•</span>}
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -137,8 +150,58 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Nasıl çalışır */}
+      <section className="border-t bg-muted/30">
+        <div className="container mx-auto px-4 py-20">
+          <h2 className="mb-3 text-center text-2xl font-bold tracking-tight sm:text-3xl">
+            Üç adımda sonuç
+          </h2>
+          <p className="mx-auto mb-12 max-w-2xl text-center text-muted-foreground">
+            Kurulum yok, hesap açmak yok, dosya yüklemesi yok. Plan
+            tarayıcıdan çıkmadan saniyeler içinde sonuç.
+          </p>
+          <div className="grid gap-6 md:grid-cols-3">
+            {[
+              {
+                n: "1",
+                t: "DXF planını yükle",
+                d: "Mimari planı sürükle-bırak. Duvar, pencere ve kapı katmanları otomatik tanınır; dosya cihazından çıkmaz.",
+              },
+              {
+                n: "2",
+                t: "Eşle, oda & armatür ayarla",
+                d: "Katman checklist'i ile duvar/pencere/kapıyı doğrula, malzeme yansıtıcılığını ve konum/zamanı seç, armatürleri yerleştir.",
+              },
+              {
+                n: "3",
+                t: "Hesapla → heatmap, 3D, PDF",
+                d: "Web Worker hesabı yaparken UI akıcı kalır. Lüks haritası, 3D sahne ve çok sayfalı PDF rapor anında hazır.",
+              },
+            ].map((step) => (
+              <div
+                key={step.n}
+                className="relative rounded-xl border bg-card p-6"
+              >
+                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+                  {step.n}
+                </div>
+                <h3 className="mb-2 font-semibold">{step.t}</h3>
+                <p className="text-sm text-muted-foreground">{step.d}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-12 flex justify-center">
+            <Link href="/studio">
+              <Button size="lg" className="gap-2">
+                Hemen başla <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* İletişim */}
-      <section id="iletisim" className="border-t bg-muted/30">
+      <section id="iletisim" className="border-t bg-background">
         <div className="container mx-auto px-4 py-16">
           <h2 className="mb-8 text-center text-2xl font-bold tracking-tight">
             İletişim
@@ -148,9 +211,9 @@ export default function Home() {
               <Image
                 src="/logo.png"
                 alt="Yörünge Kurumsal Danışmanlık Eğitim Limited Şirketi"
-                width={140}
-                height={140}
-                className="shrink-0 rounded-xl bg-white p-2 shadow-sm"
+                width={170}
+                height={170}
+                className="shrink-0 object-contain drop-shadow-md"
               />
               <div className="flex-1 space-y-3 text-center sm:text-left">
                 <p className="text-lg font-semibold">

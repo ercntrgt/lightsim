@@ -156,9 +156,9 @@ export function StudioShell() {
             <Image
               src="/logo.png"
               alt="Yörünge"
-              width={32}
-              height={32}
-              className="rounded bg-white p-0.5"
+              width={40}
+              height={40}
+              className="object-contain"
             />
             <span className="font-bold tracking-tight">
               Light<span className="text-primary">Sim</span>

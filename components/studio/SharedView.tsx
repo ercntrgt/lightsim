@@ -65,9 +65,9 @@ export function SharedView() {
             <Image
               src="/logo.png"
               alt="Yörünge"
-              width={28}
-              height={28}
-              className="rounded bg-white p-0.5"
+              width={36}
+              height={36}
+              className="object-contain"
             />
             Light<span className="text-primary">Sim</span>
           </Link>
