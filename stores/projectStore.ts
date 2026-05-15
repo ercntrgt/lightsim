@@ -25,6 +25,32 @@ const noopStorage: StateStorage = {
   removeItem: () => {},
 };
 
+// localStorage'ı kota hatasına karşı korur — QuotaExceededError uygulamayı
+// çökertmemeli (büyük DXF'lerde olabilir; ham DXF zaten persist edilmiyor).
+const safeStorage: StateStorage = {
+  getItem: (k) => {
+    try {
+      return window.localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (k, v) => {
+    try {
+      window.localStorage.setItem(k, v);
+    } catch {
+      /* QuotaExceededError vb. — sessizce yoksay */
+    }
+  },
+  removeItem: (k) => {
+    try {
+      window.localStorage.removeItem(k);
+    } catch {
+      /* yoksay */
+    }
+  },
+};
+
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export const DEFAULT_LOCATION: Location = {
@@ -127,12 +153,14 @@ export const useProjectStore = create<Store>()(
     {
       name: "lightsim-project",
       storage: createJSONStorage(() =>
-        typeof window !== "undefined" ? window.localStorage : noopStorage
+        typeof window !== "undefined" ? safeStorage : noopStorage
       ),
+      // Ham DXF (tüm entity'ler) PERSIST EDİLMEZ — localStorage kotasını aşar.
+      // Türetilmiş `room` saklanır; simülasyon/3D yeniden yüklemede çalışır,
+      // 2D plan için DXF yeniden yüklenebilir.
       partialize: (s) => ({
         projectId: s.projectId,
         fileName: s.fileName,
-        dxf: s.dxf,
         layerMapping: s.layerMapping,
         room: s.room,
         fixtures: s.fixtures,

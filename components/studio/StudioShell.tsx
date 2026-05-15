@@ -125,6 +125,11 @@ export function StudioShell() {
     if (result) setView(room ? "3d" : "heatmap");
   }, [result, room]);
 
+  // Yeniden yüklemede DXF yok ama oda kalıcıysa 2D yerine 3D'yi seç.
+  useEffect(() => {
+    if (!dxf && room && view === "plan") setView("3d");
+  }, [dxf, room, view]);
+
   const stepDone = useCallback(
     (id: StepId): boolean => {
       if (id === "upload") return !!dxf;
@@ -204,11 +209,11 @@ export function StudioShell() {
 
         {/* Merkez: 2D / 3D / heatmap */}
         <main className="flex min-w-0 flex-1 flex-col bg-background p-4">
-          {dxf && (
+          {(dxf || room) && (
             <div className="mb-3 flex shrink-0 gap-1.5">
               {(
                 [
-                  { id: "plan", label: "2D Plan", icon: MapIcon, on: true },
+                  { id: "plan", label: "2D Plan", icon: MapIcon, on: !!dxf },
                   { id: "3d", label: "3D", icon: BoxIcon, on: !!room },
                   {
                     id: "heatmap",
@@ -233,19 +238,19 @@ export function StudioShell() {
             </div>
           )}
           <div className="min-h-0 flex-1">
-            {!dxf ? (
+            {!dxf && !room ? (
               <div className="flex h-full items-center justify-center">
                 <div className="w-full max-w-xl">
                   <DxfUploader />
                 </div>
               </div>
-            ) : view === "3d" && room ? (
-              <Scene3D />
             ) : view === "heatmap" && result ? (
               <div className="h-full rounded-lg border bg-card p-2">
                 <HeatmapChart result={result} />
               </div>
-            ) : (
+            ) : view === "3d" && room ? (
+              <Scene3D />
+            ) : dxf ? (
               <DxfViewer2D
                 onPlace={
                   step === "fixtures" && fixtureKey
@@ -253,6 +258,9 @@ export function StudioShell() {
                     : undefined
                 }
               />
+            ) : (
+              // DXF yeniden yüklenmedi ama oda kalıcı — 3D göster.
+              <Scene3D />
             )}
           </div>
         </main>
