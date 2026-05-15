@@ -6,7 +6,7 @@ import type { ElementType } from "@/types";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Layers, Wand2 } from "lucide-react";
+import { Layers, Wand2, CheckCircle2, Circle } from "lucide-react";
 
 const LABELS: Record<ElementType, string> = {
   wall: "Duvar",
@@ -47,6 +47,22 @@ export function LayerMapper() {
   const hasWindow = layers.some((l) => mapping[l] === "window");
   const hasFixture = layers.some((l) => mapping[l] === "fixture");
 
+  // Eşleme checklist'i için tür başına seçilen katman sayısı.
+  const perType = layers.reduce(
+    (acc, l) => {
+      const t = mapping[l];
+      if (t && t !== "ignore") acc[t] = (acc[t] ?? 0) + 1;
+      return acc;
+    },
+    {} as Partial<Record<ElementType, number>>
+  );
+  const CHECKLIST: { type: ElementType; required: boolean }[] = [
+    { type: "wall", required: true },
+    { type: "window", required: false },
+    { type: "door", required: false },
+    { type: "fixture", required: false },
+  ];
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -64,6 +80,40 @@ export function LayerMapper() {
         işaretlemeniz yeterli. Diğer tüm katmanlar otomatik olarak yok
         sayılır — hepsini eşlemek zorunda değilsiniz.
       </p>
+
+      {/* Eşleme checklist'i */}
+      <div className="space-y-1 rounded-md border bg-card p-2.5">
+        <p className="mb-1 text-xs font-medium text-muted-foreground">
+          Eşleme durumu
+        </p>
+        {CHECKLIST.map(({ type, required }) => {
+          const n = perType[type] ?? 0;
+          const done = n > 0;
+          return (
+            <div key={type} className="flex items-center gap-2 text-sm">
+              {done ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+              ) : (
+                <Circle className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+              )}
+              <span className={done ? "font-medium" : "text-muted-foreground"}>
+                {LABELS[type]}
+              </span>
+              <span className="ml-auto text-xs">
+                {done ? (
+                  <span className="text-muted-foreground">
+                    {n} katman ✓
+                  </span>
+                ) : required ? (
+                  <span className="text-amber-600">önerilen</span>
+                ) : (
+                  <span className="text-muted-foreground/60">opsiyonel</span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
 
       <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
         {layers.map((layer) => {
