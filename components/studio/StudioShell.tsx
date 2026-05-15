@@ -75,6 +75,7 @@ export function StudioShell() {
   const addFixture = useProjectStore((s) => s.addFixture);
   const roomParams = useProjectStore((s) => s.roomParams);
   const result = useSimulationStore((s) => s.result);
+  const clearSim = useSimulationStore((s) => s.clear);
 
   const [step, setStep] = useState<StepId>("upload");
   const [sampleTried, setSampleTried] = useState(false);
@@ -151,7 +152,9 @@ export function StudioShell() {
           className="gap-2"
           onClick={() => {
             reset();
+            clearSim();
             setStep("upload");
+            setView("plan");
             setSampleTried(true);
           }}
         >

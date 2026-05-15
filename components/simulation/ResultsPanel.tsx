@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
 import { fmt } from "@/lib/utils";
 import { EN_TARGETS, MIN_UNIFORMITY } from "@/lib/lighting/standards";
 import { encodeShare } from "@/lib/share";
@@ -49,6 +50,7 @@ export function ResultsPanel() {
   const fixtures = useProjectStore((s) => s.fixtures);
   const location = useProjectStore((s) => s.location);
   const settings = useProjectStore((s) => s.settings);
+  const setSettings = useProjectStore((s) => s.setSettings);
   const fileName = useProjectStore((s) => s.fileName);
 
   const status = useSimulationStore((s) => s.status);
@@ -142,6 +144,62 @@ export function ResultsPanel() {
 
   return (
     <div className="space-y-4">
+      <div className="space-y-3 rounded-lg border p-3">
+        <p className="text-sm font-medium">Gelişmiş ayarlar</p>
+        <label className="flex items-center justify-between text-sm">
+          <span>Yapay aydınlatma</span>
+          <input
+            type="checkbox"
+            checked={settings.includeArtificial}
+            onChange={(e) =>
+              setSettings({ includeArtificial: e.target.checked })
+            }
+            className="h-4 w-4 accent-[hsl(var(--primary))]"
+          />
+        </label>
+        <label className="flex items-center justify-between text-sm">
+          <span>Günışığı (ray tracing)</span>
+          <input
+            type="checkbox"
+            checked={settings.includeDaylight}
+            onChange={(e) =>
+              setSettings({ includeDaylight: e.target.checked })
+            }
+            className="h-4 w-4 accent-[hsl(var(--primary))]"
+          />
+        </label>
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs">
+            <span>Izgara aralığı</span>
+            <span className="font-mono text-muted-foreground">
+              {settings.gridSpacing.toFixed(2)} m
+            </span>
+          </div>
+          <Slider
+            value={settings.gridSpacing}
+            min={0.25}
+            max={0.5}
+            step={0.05}
+            onValueChange={(v) => setSettings({ gridSpacing: v })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs">
+            <span>Gök ışın örneği</span>
+            <span className="font-mono text-muted-foreground">
+              {settings.raySamples}
+            </span>
+          </div>
+          <Slider
+            value={settings.raySamples}
+            min={200}
+            max={1000}
+            step={100}
+            onValueChange={(v) => setSettings({ raySamples: v })}
+          />
+        </div>
+      </div>
+
       <Button
         onClick={calculate}
         disabled={running || !room}
