@@ -6,6 +6,7 @@ import type {
   DxfDocument,
   ElementType,
   Fixture,
+  FixtureKey,
   Location,
   ProjectState,
   Room,
@@ -15,6 +16,7 @@ import { autoClassify } from "@/lib/dxf/classifier";
 import {
   buildRoom,
   applyRoomParams,
+  extractFixturePositions,
   DEFAULT_ROOM_PARAMS,
   type RoomParams,
 } from "@/lib/dxf/extruder";
@@ -75,6 +77,8 @@ interface ProjectActions {
   setDxf: (fileName: string, dxf: DxfDocument) => void;
   setLayerType: (layer: string, type: ElementType) => void;
   buildRoomFromDxf: () => void;
+  /** "fixture" katmanından armatür konumlarını çıkarıp yerleştirir. Adet döner. */
+  placeFixturesFromDxf: (typeKey: FixtureKey) => number;
   setRoomParams: (p: Partial<RoomParams>) => void;
   addFixture: (f: Fixture) => void;
   moveFixture: (id: string, x: number, y: number) => void;
@@ -119,6 +123,23 @@ export const useProjectStore = create<Store>()(
         const { dxf, layerMapping, roomParams } = get();
         if (!dxf) return;
         set({ room: buildRoom(dxf, layerMapping, roomParams) });
+      },
+
+      placeFixturesFromDxf: (typeKey) => {
+        const { dxf, layerMapping, roomParams, fixtures } = get();
+        if (!dxf) return 0;
+        const pts = extractFixturePositions(dxf, layerMapping);
+        // Önceki DXF kaynaklı armatürleri (id "dxf" ile başlayan) değiştir,
+        // elle yerleştirilenleri ("fx") koru.
+        const manual = fixtures.filter((f) => !f.id.startsWith("dxf"));
+        const fromDxf: Fixture[] = pts.map((p, i) => ({
+          id: `dxf${i}-${Math.random().toString(36).slice(2, 6)}`,
+          typeKey,
+          position: { x: p.x, y: p.y, z: roomParams.wallHeight },
+          rotationDeg: 0,
+        }));
+        set({ fixtures: [...manual, ...fromDxf] });
+        return fromDxf.length;
       },
 
       setRoomParams: (p) =>

@@ -1,16 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Sun, Moon, Compass } from "lucide-react";
+import { Sun, Moon, Compass, Search, Loader2, MapPin } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { solarPosition } from "@/lib/solar/position";
 import { clearSkyHorizontalLux } from "@/lib/solar/irradiance";
+import { useToast } from "@/components/ui/toast";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select } from "@/components/ui/select";
 import { fmt } from "@/lib/utils";
+
+interface GeoHit {
+  display_name: string;
+  lat: string;
+  lon: string;
+}
 
 const LocationMap = dynamic(
   () => import("@/components/simulation/LocationMap"),
@@ -32,6 +40,43 @@ const hhmm = (min: number) =>
 export function SolarPanel() {
   const location = useProjectStore((s) => s.location);
   const setLocation = useProjectStore((s) => s.setLocation);
+  const { error } = useToast();
+
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<GeoHit[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  const search = async () => {
+    const query = q.trim();
+    if (query.length < 2) return;
+    setSearching(true);
+    setHits([]);
+    try {
+      const res = await fetch(
+        "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=tr&q=" +
+          encodeURIComponent(query)
+      );
+      if (!res.ok) throw new Error("Arama servisi yanıt vermedi");
+      const data = (await res.json()) as GeoHit[];
+      if (data.length === 0) error("Sonuç yok", `"${query}" bulunamadı`);
+      setHits(data);
+    } catch (e) {
+      error("Konum araması başarısız", e instanceof Error ? e.message : "");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const pick = (h: GeoHit) => {
+    const short = h.display_name.split(",").slice(0, 2).join(",").trim();
+    setLocation({
+      lat: +parseFloat(h.lat).toFixed(4),
+      lng: +parseFloat(h.lon).toFixed(4),
+      label: short,
+    });
+    setHits([]);
+    setQ(short);
+  };
 
   const sun = useMemo(() => solarPosition(location), [location]);
   const clearLux = useMemo(
@@ -42,6 +87,48 @@ export function SolarPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Konum arama */}
+      <div className="relative space-y-1.5">
+        <Label>Konum ara</Label>
+        <div className="flex gap-2">
+          <Input
+            value={q}
+            placeholder="Şehir, ilçe veya adres…"
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && search()}
+            className="h-9"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 shrink-0 px-3"
+            disabled={searching}
+            onClick={search}
+            aria-label="Ara"
+          >
+            {searching ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+        {hits.length > 0 && (
+          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border bg-popover shadow-lg">
+            {hits.map((h, i) => (
+              <button
+                key={i}
+                onClick={() => pick(h)}
+                className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs hover:bg-accent"
+              >
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="line-clamp-2">{h.display_name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="h-52 overflow-hidden rounded-lg border">
         <LocationMap
           lat={location.lat}

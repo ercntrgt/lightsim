@@ -216,3 +216,42 @@ export function applyRoomParams(room: Room, params: RoomParams): Room {
     })),
   };
 }
+
+/**
+ * "fixture" katmanına eşlenmiş entity'lerden armatür konumlarını çıkarır.
+ * Her entity'nin ağırlık merkezi alınır; birbirine clusterDist'ten yakın
+ * olanlar tek armatüre indirgenir (çok çizgili bir blok = 1 armatür).
+ */
+export function extractFixturePositions(
+  doc: DxfDocument,
+  mapping: LayerMapping,
+  clusterDist = 0.4
+): Point2D[] {
+  const ents = doc.entities.filter((e) => mapping[e.layer] === "fixture");
+  const centroids: Point2D[] = [];
+  for (const e of ents) {
+    if (!e.points.length) continue;
+    let sx = 0,
+      sy = 0;
+    for (const p of e.points) {
+      sx += p.x;
+      sy += p.y;
+    }
+    centroids.push({ x: sx / e.points.length, y: sy / e.points.length });
+  }
+  // Basit kümeleme.
+  const clusters: { x: number; y: number; n: number }[] = [];
+  for (const c of centroids) {
+    const hit = clusters.find(
+      (k) => Math.hypot(k.x / k.n - c.x, k.y / k.n - c.y) < clusterDist
+    );
+    if (hit) {
+      hit.x += c.x;
+      hit.y += c.y;
+      hit.n += 1;
+    } else {
+      clusters.push({ x: c.x, y: c.y, n: 1 });
+    }
+  }
+  return clusters.map((k) => ({ x: k.x / k.n, y: k.y / k.n }));
+}

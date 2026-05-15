@@ -12,6 +12,7 @@ const LABELS: Record<ElementType, string> = {
   wall: "Duvar",
   window: "Pencere",
   door: "Kapı",
+  fixture: "Armatür",
   ignore: "Yok say",
 };
 
@@ -44,6 +45,7 @@ export function LayerMapper() {
 
   const hasWall = layers.some((l) => mapping[l] === "wall");
   const hasWindow = layers.some((l) => mapping[l] === "window");
+  const hasFixture = layers.some((l) => mapping[l] === "fixture");
 
   return (
     <div className="space-y-3">
@@ -89,13 +91,19 @@ export function LayerMapper() {
                 }
                 className="h-8 w-32 text-xs"
               >
-                {(["wall", "window", "door", "ignore"] as ElementType[]).map(
-                  (opt) => (
-                    <option key={opt} value={opt}>
-                      {LABELS[opt]}
-                    </option>
-                  )
-                )}
+                {(
+                  [
+                    "wall",
+                    "window",
+                    "door",
+                    "fixture",
+                    "ignore",
+                  ] as ElementType[]
+                ).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {LABELS[opt]}
+                  </option>
+                ))}
               </Select>
             </div>
           );
@@ -116,6 +124,12 @@ export function LayerMapper() {
         <p className="text-xs text-muted-foreground">
           Pencere katmanı yok — günışığı katkısı hesaplanmaz, yalnızca
           yapay aydınlatma.
+        </p>
+      )}
+      {hasFixture && (
+        <p className="text-xs text-primary">
+          Armatür katmanı seçildi — &quot;Armatürler&quot; adımında bu
+          katmandaki konumlara tek tıkla armatür yerleştirebilirsiniz.
         </p>
       )}
     </div>

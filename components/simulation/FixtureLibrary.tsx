@@ -1,11 +1,15 @@
 "use client";
 
-import { Lightbulb, Trash2, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Lightbulb, Trash2, Plus, LayoutGrid } from "lucide-react";
 import { FIXTURE_LIST, FIXTURE_TYPES } from "@/lib/lighting/fixtures";
 import { useProjectStore } from "@/stores/projectStore";
+import { extractFixturePositions } from "@/lib/dxf/extruder";
+import { useToast } from "@/components/ui/toast";
 import type { FixtureKey } from "@/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 
 export function FixtureLibrary({
   selectedKey,
@@ -17,12 +21,60 @@ export function FixtureLibrary({
   const fixtures = useProjectStore((s) => s.fixtures);
   const removeFixture = useProjectStore((s) => s.removeFixture);
   const room = useProjectStore((s) => s.room);
+  const dxf = useProjectStore((s) => s.dxf);
+  const layerMapping = useProjectStore((s) => s.layerMapping);
+  const placeFixturesFromDxf = useProjectStore((s) => s.placeFixturesFromDxf);
+  const { success } = useToast();
+
+  const [dxfType, setDxfType] = useState<FixtureKey>("led_panel_60");
+
+  const dxfCount = useMemo(
+    () => (dxf ? extractFixturePositions(dxf, layerMapping).length : 0),
+    [dxf, layerMapping]
+  );
 
   return (
     <div className="space-y-4">
+      {dxfCount > 0 && (
+        <div className="space-y-2 rounded-lg border border-primary/40 bg-primary/5 p-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <LayoutGrid className="h-4 w-4 text-primary" />
+            DXF armatür katmanı — {dxfCount} konum bulundu
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Bu konumlara hangi armatür tipini yerleştirelim?
+          </p>
+          <Select
+            value={dxfType}
+            onChange={(e) => setDxfType(e.target.value as FixtureKey)}
+            className="h-9 text-xs"
+          >
+            {FIXTURE_LIST.map((f) => (
+              <option key={f.key} value={f.key}>
+                {f.name} — {f.lumens} lm
+              </option>
+            ))}
+          </Select>
+          <Button
+            size="sm"
+            className="w-full gap-2"
+            onClick={() => {
+              const n = placeFixturesFromDxf(dxfType);
+              success(
+                "DXF'ten armatür yerleştirildi",
+                `${n} adet ${FIXTURE_TYPES[dxfType].name}`
+              );
+            }}
+          >
+            <LayoutGrid className="h-4 w-4" />
+            {dxfCount} konuma yerleştir
+          </Button>
+        </div>
+      )}
+
       <p className="text-sm text-muted-foreground">
-        Bir armatür seçip plan üzerine tıklayarak yerleştirin. Tavan
-        yüksekliğine ({room?.wallHeight ?? 2.7} m) monte edilir.
+        Veya bir armatür tipi seçip plan üzerine tıklayarak elle yerleştirin.
+        Tavan yüksekliğine ({room?.wallHeight ?? 2.7} m) monte edilir.
       </p>
 
       <div className="space-y-2">
@@ -64,9 +116,7 @@ export function FixtureLibrary({
           <span>Yerleştirilen ({fixtures.length})</span>
         </div>
         {fixtures.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Henüz armatür yok.
-          </p>
+          <p className="text-xs text-muted-foreground">Henüz armatür yok.</p>
         ) : (
           <div className="max-h-40 space-y-1 overflow-y-auto">
             {fixtures.map((fx, i) => (

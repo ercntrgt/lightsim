@@ -27,6 +27,21 @@ const RULES: Rule[] = [
     patterns: [/door/i, /kap[iı]/i, /a-?door/i],
   },
   {
+    type: "fixture",
+    patterns: [
+      /fixture/i,
+      /armat[uü]r/i,
+      /luminaire/i,
+      /light(ing)?/i,
+      /ayd[ıi]nlatma/i,
+      /lamba?/i,
+      /a-?lite/i,
+      /a-?clng-?lite/i,
+      /a-?ceil.*lite/i,
+      /spot|downlight|panel/i,
+    ],
+  },
+  {
     type: "wall",
     patterns: [
       /wall/i,

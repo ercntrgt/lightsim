@@ -1,6 +1,11 @@
 // LightSim — merkezi tip sözleşmesi. lib/stores/components bu dosyayı import eder.
 
-export type ElementType = "wall" | "window" | "door" | "ignore";
+export type ElementType =
+  | "wall"
+  | "window"
+  | "door"
+  | "fixture"
+  | "ignore";
 
 export interface Point2D {
   x: number;

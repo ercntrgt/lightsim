@@ -10,6 +10,7 @@ const COLORS: Record<ElementType, string> = {
   wall: "#1e293b",
   window: "#0ea5e9",
   door: "#b45309",
+  fixture: "#9333ea",
   ignore: "#cbd5e1",
 };
 
