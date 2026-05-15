@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useProjectStore } from "@/stores/projectStore";
+import { useSimulationStore } from "@/stores/simulationStore";
+import { viridisCss } from "@/lib/viz/colormap";
 import type { ElementType, Point2D } from "@/types";
 
 const COLORS: Record<ElementType, string> = {
@@ -24,6 +26,7 @@ export function DxfViewer2D({ onPlace, showFixtures = true, className }: Props) 
   const mapping = useProjectStore((s) => s.layerMapping);
   const room = useProjectStore((s) => s.room);
   const fixtures = useProjectStore((s) => s.fixtures);
+  const result = useSimulationStore((s) => s.result);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -105,6 +108,24 @@ export function DxfViewer2D({ onPlace, showFixtures = true, className }: Props) 
       ctx.fill();
     }
 
+    // Lüks heatmap (simülasyon sonucu varsa).
+    if (result && result.grid.length) {
+      const maxLux = Math.max(1e-6, result.max);
+      const cell = result.spacing * view.current.scale;
+      for (const g of result.grid) {
+        const s = toScreen({ x: g.x, y: g.y });
+        ctx.fillStyle = viridisCss(g.lux / maxLux);
+        ctx.globalAlpha = 0.72;
+        ctx.fillRect(
+          s.x - cell / 2,
+          s.y - cell / 2,
+          cell + 0.5,
+          cell + 0.5
+        );
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // Entity'ler.
     for (const e of dxf.entities) {
       const type: ElementType = mapping[e.layer] ?? "ignore";
@@ -146,7 +167,7 @@ export function DxfViewer2D({ onPlace, showFixtures = true, className }: Props) 
     ctx.font = "11px sans-serif";
     ctx.textAlign = "left";
     ctx.fillText("1 m", 16, size.h - 26);
-  }, [dxf, mapping, room, fixtures, size, showFixtures, fit]);
+  }, [dxf, mapping, room, fixtures, result, size, showFixtures, fit]);
 
   useEffect(() => {
     view.current.fitted = false;

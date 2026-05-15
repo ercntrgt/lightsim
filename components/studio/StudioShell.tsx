@@ -21,6 +21,10 @@ import { cn } from "@/lib/utils";
 import { DxfUploader } from "@/components/dxf/DxfUploader";
 import { DxfViewer2D } from "@/components/dxf/DxfViewer2D";
 import { LayerMapper } from "@/components/dxf/LayerMapper";
+import { MaterialEditor } from "@/components/simulation/MaterialEditor";
+import { FixtureLibrary } from "@/components/simulation/FixtureLibrary";
+import { ResultsPanel } from "@/components/simulation/ResultsPanel";
+import type { FixtureKey, Point2D } from "@/types";
 
 const STEPS = [
   { id: "upload", label: "DXF Yükle", icon: Upload },
@@ -40,9 +44,25 @@ export function StudioShell() {
   const fileName = useProjectStore((s) => s.fileName);
   const setDxf = useProjectStore((s) => s.setDxf);
   const reset = useProjectStore((s) => s.reset);
+  const addFixture = useProjectStore((s) => s.addFixture);
+  const roomParams = useProjectStore((s) => s.roomParams);
 
   const [step, setStep] = useState<StepId>("upload");
   const [sampleTried, setSampleTried] = useState(false);
+  const [fixtureKey, setFixtureKey] = useState<FixtureKey | null>(null);
+
+  const placeFixture = useCallback(
+    (w: Point2D) => {
+      if (!fixtureKey) return;
+      addFixture({
+        id: `fx${Math.random().toString(36).slice(2, 8)}`,
+        typeKey: fixtureKey,
+        position: { x: w.x, y: w.y, z: roomParams.wallHeight },
+        rotationDeg: 0,
+      });
+    },
+    [fixtureKey, addFixture, roomParams.wallHeight]
+  );
 
   // Örnek proje query parametresi.
   useEffect(() => {
@@ -147,7 +167,11 @@ export function StudioShell() {
         {/* Merkez: 2D plan */}
         <main className="min-w-0 flex-1 bg-background p-4">
           {dxf ? (
-            <DxfViewer2D />
+            <DxfViewer2D
+              onPlace={
+                step === "fixtures" && fixtureKey ? placeFixture : undefined
+              }
+            />
           ) : (
             <div className="flex h-full items-center justify-center">
               <div className="w-full max-w-xl">
@@ -175,18 +199,35 @@ export function StudioShell() {
               <LayerMapper />
             </>
           )}
-          {(step === "room" ||
-            step === "location" ||
-            step === "fixtures" ||
-            step === "results") && (
+          {step === "room" && (
+            <>
+              <h2 className="mb-3 font-semibold">3 · Oda & Malzeme</h2>
+              <MaterialEditor />
+            </>
+          )}
+          {step === "location" && (
             <div className="space-y-2">
-              <h2 className="font-semibold">
-                {STEPS.find((s) => s.id === step)?.label}
-              </h2>
+              <h2 className="font-semibold">4 · Konum & Zaman</h2>
               <p className="text-sm text-muted-foreground">
-                Bu adım sonraki sürümde etkinleşecek.
+                Günışığı simülasyonu (harita, tarih/saat, bina kuzeyi) bir
+                sonraki sürümde etkinleşecek.
               </p>
             </div>
+          )}
+          {step === "fixtures" && (
+            <>
+              <h2 className="mb-3 font-semibold">5 · Armatürler</h2>
+              <FixtureLibrary
+                selectedKey={fixtureKey}
+                onSelectKey={setFixtureKey}
+              />
+            </>
+          )}
+          {step === "results" && (
+            <>
+              <h2 className="mb-3 font-semibold">6 · Sonuçlar</h2>
+              <ResultsPanel />
+            </>
           )}
         </aside>
       </div>

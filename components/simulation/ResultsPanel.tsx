@@ -1,0 +1,181 @@
+"use client";
+
+import { useState } from "react";
+import { Play, Loader2, Activity } from "lucide-react";
+import { useProjectStore } from "@/stores/projectStore";
+import { useSimulationStore } from "@/stores/simulationStore";
+import { runSimulationInWorker } from "@/lib/workers/client";
+import { useToast } from "@/components/ui/toast";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { fmt } from "@/lib/utils";
+
+// EN 12464-1 referans bakım aydınlığı (lüks).
+const EN_TARGETS: Record<string, { label: string; lux: number }> = {
+  office: { label: "Ofis / büro", lux: 500 },
+  openOffice: { label: "Açık ofis", lux: 500 },
+  meeting: { label: "Toplantı odası", lux: 500 },
+  classroom: { label: "Derslik", lux: 300 },
+  reception: { label: "Resepsiyon", lux: 300 },
+  archive: { label: "Arşiv", lux: 200 },
+  corridor: { label: "Koridor", lux: 100 },
+  stairs: { label: "Merdiven", lux: 100 },
+  technical: { label: "Teknik çizim", lux: 750 },
+};
+
+function Metric({
+  label,
+  value,
+  unit,
+  hint,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-semibold tabular-nums">
+        {value}
+        {unit && (
+          <span className="ml-1 text-sm font-normal text-muted-foreground">
+            {unit}
+          </span>
+        )}
+      </p>
+      {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+export function ResultsPanel() {
+  const { error } = useToast();
+  const room = useProjectStore((s) => s.room);
+  const fixtures = useProjectStore((s) => s.fixtures);
+  const location = useProjectStore((s) => s.location);
+  const settings = useProjectStore((s) => s.settings);
+
+  const status = useSimulationStore((s) => s.status);
+  const progress = useSimulationStore((s) => s.progress);
+  const result = useSimulationStore((s) => s.result);
+  const start = useSimulationStore((s) => s.start);
+  const setProgress = useSimulationStore((s) => s.setProgress);
+  const setResult = useSimulationStore((s) => s.setResult);
+  const fail = useSimulationStore((s) => s.fail);
+
+  const [target, setTarget] = useState("office");
+
+  const calculate = async () => {
+    if (!room) return error("Oda yok", "Önce odayı oluşturun.");
+    if (fixtures.length === 0 && !settings.includeDaylight)
+      return error("Kaynak yok", "Armatür ekleyin veya günışığını açın.");
+    start();
+    try {
+      const r = await runSimulationInWorker(
+        { room, fixtures, location, settings },
+        (f) => setProgress(f)
+      );
+      setResult(r);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Hesaplama hatası";
+      fail(msg);
+      error("Simülasyon başarısız", msg);
+    }
+  };
+
+  const running = status === "running";
+  const tgt = EN_TARGETS[target];
+  const avgPass = result ? result.avg >= tgt.lux : false;
+  const uoPass = result ? result.uniformityUo >= 0.6 : false;
+
+  return (
+    <div className="space-y-4">
+      <Button
+        onClick={calculate}
+        disabled={running || !room}
+        className="w-full gap-2"
+        size="lg"
+      >
+        {running ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Play className="h-4 w-4" />
+        )}
+        {running ? "Hesaplanıyor…" : "Hesapla"}
+      </Button>
+
+      {running && (
+        <div className="space-y-1">
+          <Progress value={progress * 100} />
+          <p className="text-right text-xs text-muted-foreground">
+            %{Math.round(progress * 100)}
+          </p>
+        </div>
+      )}
+
+      {result && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <Metric
+              label="Ortalama"
+              value={fmt(result.avg)}
+              unit="lx"
+              hint={`Lümen yönt.: ${fmt(result.lumenMethodAvg)} lx`}
+            />
+            <Metric label="Min / Max" value={`${fmt(result.min)} / ${fmt(result.max)}`} unit="lx" />
+            <Metric
+              label="Uniformity Uo"
+              value={result.uniformityUo.toFixed(2)}
+              hint="EN 12464-1: Uo ≥ 0.60"
+            />
+            <Metric
+              label="Daylight Factor"
+              value={result.daylightFactorPct.toFixed(1)}
+              unit="%"
+            />
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Mekân türü (EN 12464-1)</label>
+            <Select value={target} onChange={(e) => setTarget(e.target.value)}>
+              {Object.entries(EN_TARGETS).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v.label} — {v.lux} lx
+                </option>
+              ))}
+            </Select>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={avgPass ? "success" : "destructive"}>
+                Aydınlık {avgPass ? "✓ uygun" : "✗ yetersiz"} (hedef {tgt.lux} lx)
+              </Badge>
+              <Badge variant={uoPass ? "success" : "warning"}>
+                Uniformity {uoPass ? "✓" : "✗"} {result.uniformityUo.toFixed(2)}
+              </Badge>
+            </div>
+          </div>
+
+          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <Activity className="h-3 w-3" />
+            {result.grid.length} hesap noktası · {result.durationMs} ms · sonuç
+            tahminîdir.
+          </p>
+        </>
+      )}
+
+      {!result && !running && (
+        <p className="text-sm text-muted-foreground">
+          Oda, malzeme ve armatürleri ayarladıktan sonra
+          &quot;Hesapla&quot; deyin. Ağır hesap Web Worker&apos;da çalışır,
+          arayüz kilitlenmez.
+        </p>
+      )}
+    </div>
+  );
+}
