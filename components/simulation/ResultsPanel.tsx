@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Play, Loader2, Activity } from "lucide-react";
+import { Play, Loader2, Activity, Download, Share2 } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSimulationStore } from "@/stores/simulationStore";
 import { runSimulationInWorker } from "@/lib/workers/client";
@@ -12,19 +12,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { fmt } from "@/lib/utils";
-
-// EN 12464-1 referans bakım aydınlığı (lüks).
-const EN_TARGETS: Record<string, { label: string; lux: number }> = {
-  office: { label: "Ofis / büro", lux: 500 },
-  openOffice: { label: "Açık ofis", lux: 500 },
-  meeting: { label: "Toplantı odası", lux: 500 },
-  classroom: { label: "Derslik", lux: 300 },
-  reception: { label: "Resepsiyon", lux: 300 },
-  archive: { label: "Arşiv", lux: 200 },
-  corridor: { label: "Koridor", lux: 100 },
-  stairs: { label: "Merdiven", lux: 100 },
-  technical: { label: "Teknik çizim", lux: 750 },
-};
+import { EN_TARGETS, MIN_UNIFORMITY } from "@/lib/lighting/standards";
+import { encodeShare } from "@/lib/share";
+import { renderResultPng } from "@/lib/viz/heatmapPng";
 
 function Metric({
   label,
@@ -54,11 +44,12 @@ function Metric({
 }
 
 export function ResultsPanel() {
-  const { error } = useToast();
+  const { error, success } = useToast();
   const room = useProjectStore((s) => s.room);
   const fixtures = useProjectStore((s) => s.fixtures);
   const location = useProjectStore((s) => s.location);
   const settings = useProjectStore((s) => s.settings);
+  const fileName = useProjectStore((s) => s.fileName);
 
   const status = useSimulationStore((s) => s.status);
   const progress = useSimulationStore((s) => s.progress);
@@ -69,6 +60,7 @@ export function ResultsPanel() {
   const fail = useSimulationStore((s) => s.fail);
 
   const [target, setTarget] = useState("office");
+  const [busy, setBusy] = useState<"pdf" | "share" | null>(null);
 
   const calculate = async () => {
     if (!room) return error("Oda yok", "Önce odayı oluşturun.");
@@ -91,7 +83,62 @@ export function ResultsPanel() {
   const running = status === "running";
   const tgt = EN_TARGETS[target];
   const avgPass = result ? result.avg >= tgt.lux : false;
-  const uoPass = result ? result.uniformityUo >= 0.6 : false;
+  const uoPass = result ? result.uniformityUo >= MIN_UNIFORMITY : false;
+
+  const downloadPdf = async () => {
+    if (!room || !result) return;
+    setBusy("pdf");
+    try {
+      const image = renderResultPng(room, result);
+      const res = await fetch("/api/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName,
+          room,
+          location,
+          result,
+          targetKey: target,
+          image,
+        }),
+      });
+      if (!res.ok) throw new Error("Rapor üretilemedi");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `lightsim-rapor-${Date.now()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      success("PDF indirildi");
+    } catch (e) {
+      error("PDF hatası", e instanceof Error ? e.message : "");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const sharePromise = async () => {
+    if (!room || !result) return;
+    setBusy("share");
+    try {
+      const d = encodeShare({
+        fileName,
+        room,
+        fixtures,
+        location,
+        settings,
+        result,
+      });
+      const link = `${window.location.origin}/studio/s?d=${d}`;
+      await navigator.clipboard.writeText(link).catch(() => {});
+      success("Paylaşım linki kopyalandı", `${d.length} karakter`);
+    } catch (e) {
+      error("Paylaşım hatası", e instanceof Error ? e.message : "");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -159,6 +206,39 @@ export function ResultsPanel() {
                 Uniformity {uoPass ? "✓" : "✗"} {result.uniformityUo.toFixed(2)}
               </Badge>
             </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={busy !== null}
+              onClick={downloadPdf}
+            >
+              {busy === "pdf" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              PDF indir
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={busy !== null}
+              onClick={sharePromise}
+            >
+              {busy === "share" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Share2 className="h-3.5 w-3.5" />
+              )}
+              Paylaş
+            </Button>
           </div>
 
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
