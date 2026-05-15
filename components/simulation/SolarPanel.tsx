@@ -52,14 +52,15 @@ export function SolarPanel() {
     setSearching(true);
     setHits([]);
     try {
-      const res = await fetch(
-        "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=tr&q=" +
-          encodeURIComponent(query)
-      );
-      if (!res.ok) throw new Error("Arama servisi yanıt vermedi");
-      const data = (await res.json()) as GeoHit[];
-      if (data.length === 0) error("Sonuç yok", `"${query}" bulunamadı`);
-      setHits(data);
+      const res = await fetch("/api/geocode?q=" + encodeURIComponent(query));
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(
+          (data && data.error) || "Arama servisi yanıt vermedi"
+        );
+      const list = data as GeoHit[];
+      if (list.length === 0) error("Sonuç yok", `"${query}" bulunamadı`);
+      setHits(list);
     } catch (e) {
       error("Konum araması başarısız", e instanceof Error ? e.message : "");
     } finally {

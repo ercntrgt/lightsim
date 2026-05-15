@@ -17,6 +17,8 @@ import {
   Map as MapIcon,
   Box as BoxIcon,
   Grid2x2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useSimulationStore } from "@/stores/simulationStore";
 import { useProjectStore } from "@/stores/projectStore";
@@ -139,6 +141,11 @@ export function StudioShell() {
     },
     [dxf, room]
   );
+
+  const stepIdx = STEPS.findIndex((x) => x.id === step);
+  const goPrev = () => stepIdx > 0 && setStep(STEPS[stepIdx - 1].id);
+  const goNext = () =>
+    stepIdx < STEPS.length - 1 && setStep(STEPS[stepIdx + 1].id);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -276,7 +283,8 @@ export function StudioShell() {
         </main>
 
         {/* Sağ panel */}
-        <aside className="w-80 shrink-0 overflow-y-auto border-l bg-card p-4">
+        <aside className="flex w-80 shrink-0 flex-col border-l bg-card">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {step === "upload" && (
             <div className="space-y-3">
               <h2 className="font-semibold">1 · DXF Yükle</h2>
@@ -320,6 +328,23 @@ export function StudioShell() {
               <ResultsPanel />
             </>
           )}
+          </div>
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-card p-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5"
+              disabled={stepIdx === 0}
+              onClick={goPrev}
+            >
+              <ChevronLeft className="h-4 w-4" /> Geri
+            </Button>
+            {stepIdx < STEPS.length - 1 && (
+              <Button size="sm" className="gap-1.5" onClick={goNext}>
+                İleri <ChevronRight className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </aside>
       </div>
     </div>
