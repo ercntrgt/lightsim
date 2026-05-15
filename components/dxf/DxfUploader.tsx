@@ -64,14 +64,11 @@ export function DxfUploader() {
     [handleFile]
   );
 
+  // Tip kısıtı YOK: macOS/Windows native seçicide .dwg için MIME tipleri
+  // güvenilmez (dosya gri görünüp seçilemiyordu). Her dosya seçilebilir;
+  // doğrulamayı handleFile dosya başlığından (DXF mi, ikili DWG mi) yapar.
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      "image/vnd.dxf": [".dxf"],
-      "application/dxf": [".dxf"],
-      "image/vnd.dwg": [".dwg"],
-      "application/acad": [".dwg"],
-    },
     multiple: false,
   });
 
