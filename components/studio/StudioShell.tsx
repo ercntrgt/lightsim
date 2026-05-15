@@ -28,6 +28,7 @@ import { DxfViewer2D } from "@/components/dxf/DxfViewer2D";
 import { LayerMapper } from "@/components/dxf/LayerMapper";
 import { MaterialEditor } from "@/components/simulation/MaterialEditor";
 import { FixtureLibrary } from "@/components/simulation/FixtureLibrary";
+import { SolarPanel } from "@/components/simulation/SolarPanel";
 import { ResultsPanel } from "@/components/simulation/ResultsPanel";
 import type { FixtureKey, Point2D } from "@/types";
 
@@ -278,13 +279,10 @@ export function StudioShell() {
             </>
           )}
           {step === "location" && (
-            <div className="space-y-2">
-              <h2 className="font-semibold">4 · Konum & Zaman</h2>
-              <p className="text-sm text-muted-foreground">
-                Günışığı simülasyonu (harita, tarih/saat, bina kuzeyi) bir
-                sonraki sürümde etkinleşecek.
-              </p>
-            </div>
+            <>
+              <h2 className="mb-3 font-semibold">4 · Konum & Zaman</h2>
+              <SolarPanel />
+            </>
           )}
           {step === "fixtures" && (
             <>
