@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import {
   Upload,
@@ -12,7 +13,11 @@ import {
   BarChart3,
   RotateCcw,
   Check,
+  Map as MapIcon,
+  Box as BoxIcon,
+  Grid2x2,
 } from "lucide-react";
+import { useSimulationStore } from "@/stores/simulationStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { parseDxf } from "@/lib/dxf/parser";
 import { useToast } from "@/components/ui/toast";
@@ -25,6 +30,28 @@ import { MaterialEditor } from "@/components/simulation/MaterialEditor";
 import { FixtureLibrary } from "@/components/simulation/FixtureLibrary";
 import { ResultsPanel } from "@/components/simulation/ResultsPanel";
 import type { FixtureKey, Point2D } from "@/types";
+
+const Scene3D = dynamic(() => import("@/components/scene/Scene3D"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-center justify-center text-muted-foreground">
+      3D sahne yükleniyor…
+    </div>
+  ),
+});
+const HeatmapChart = dynamic(
+  () => import("@/components/simulation/HeatmapChart"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        Heatmap yükleniyor…
+      </div>
+    ),
+  }
+);
+
+type ViewMode = "plan" | "3d" | "heatmap";
 
 const STEPS = [
   { id: "upload", label: "DXF Yükle", icon: Upload },
@@ -46,10 +73,12 @@ export function StudioShell() {
   const reset = useProjectStore((s) => s.reset);
   const addFixture = useProjectStore((s) => s.addFixture);
   const roomParams = useProjectStore((s) => s.roomParams);
+  const result = useSimulationStore((s) => s.result);
 
   const [step, setStep] = useState<StepId>("upload");
   const [sampleTried, setSampleTried] = useState(false);
   const [fixtureKey, setFixtureKey] = useState<FixtureKey | null>(null);
+  const [view, setView] = useState<ViewMode>("plan");
 
   const placeFixture = useCallback(
     (w: Point2D) => {
@@ -88,6 +117,11 @@ export function StudioShell() {
   useEffect(() => {
     if (dxf && step === "upload") setStep("layers");
   }, [dxf, step]);
+
+  // Sonuç gelince 3D görünüme geç (heatmap düzlemi görünür).
+  useEffect(() => {
+    if (result) setView(room ? "3d" : "heatmap");
+  }, [result, room]);
 
   const stepDone = useCallback(
     (id: StepId): boolean => {
@@ -164,21 +198,59 @@ export function StudioShell() {
           })}
         </nav>
 
-        {/* Merkez: 2D plan */}
-        <main className="min-w-0 flex-1 bg-background p-4">
-          {dxf ? (
-            <DxfViewer2D
-              onPlace={
-                step === "fixtures" && fixtureKey ? placeFixture : undefined
-              }
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="w-full max-w-xl">
-                <DxfUploader />
-              </div>
+        {/* Merkez: 2D / 3D / heatmap */}
+        <main className="flex min-w-0 flex-1 flex-col bg-background p-4">
+          {dxf && (
+            <div className="mb-3 flex shrink-0 gap-1.5">
+              {(
+                [
+                  { id: "plan", label: "2D Plan", icon: MapIcon, on: true },
+                  { id: "3d", label: "3D", icon: BoxIcon, on: !!room },
+                  {
+                    id: "heatmap",
+                    label: "Heatmap",
+                    icon: Grid2x2,
+                    on: !!result,
+                  },
+                ] as const
+              ).map((v) => (
+                <Button
+                  key={v.id}
+                  size="sm"
+                  variant={view === v.id ? "default" : "outline"}
+                  disabled={!v.on}
+                  className="gap-1.5"
+                  onClick={() => setView(v.id as ViewMode)}
+                >
+                  <v.icon className="h-3.5 w-3.5" />
+                  {v.label}
+                </Button>
+              ))}
             </div>
           )}
+          <div className="min-h-0 flex-1">
+            {!dxf ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="w-full max-w-xl">
+                  <DxfUploader />
+                </div>
+              </div>
+            ) : view === "3d" && room ? (
+              <Scene3D />
+            ) : view === "heatmap" && result ? (
+              <div className="h-full rounded-lg border bg-card p-2">
+                <HeatmapChart result={result} />
+              </div>
+            ) : (
+              <DxfViewer2D
+                onPlace={
+                  step === "fixtures" && fixtureKey
+                    ? placeFixture
+                    : undefined
+                }
+              />
+            )}
+          </div>
         </main>
 
         {/* Sağ panel */}
