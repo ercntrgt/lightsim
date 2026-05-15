@@ -2,6 +2,7 @@
 // @react-pdf/renderer ile PDF rapor düzeni (sunucu tarafı, Node runtime).
 
 import React from "react";
+import path from "path";
 import {
   Document,
   Page,
@@ -9,10 +10,25 @@ import {
   Text,
   Image,
   StyleSheet,
+  Font,
 } from "@react-pdf/renderer";
 import type { Location, Room, SimulationResult } from "@/types";
 import { EN_TARGETS, buildRecommendations } from "@/lib/lighting/standards";
 import { fmt } from "@/lib/utils";
+
+// Varsayılan Helvetica Türkçe karakterleri (İ ı ş ğ ç …) içermez; rapordaki
+// "i → 1" ve bozuk kelimeler bundan kaynaklanıyordu. Tam Türkçe destekli
+// DejaVu Sans'ı repodan (public/fonts) gömüyoruz — çevrimdışı, deterministik.
+const FONT_DIR = path.join(process.cwd(), "public", "fonts");
+Font.register({
+  family: "DejaVu Sans",
+  fonts: [
+    { src: path.join(FONT_DIR, "DejaVuSans.ttf"), fontWeight: 400 },
+    { src: path.join(FONT_DIR, "DejaVuSans-Bold.ttf"), fontWeight: 700 },
+  ],
+});
+// Türkçe kelimeleri tirelemeden bölünme/hatalı kırılmayı önle.
+Font.registerHyphenationCallback((word) => [word]);
 
 export interface ReportData {
   fileName: string | null;
@@ -24,7 +40,13 @@ export interface ReportData {
 }
 
 const s = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, color: "#1e293b", lineHeight: 1.5 },
+  page: {
+    padding: 40,
+    fontSize: 10,
+    color: "#1e293b",
+    lineHeight: 1.5,
+    fontFamily: "DejaVu Sans",
+  },
   h1: { fontSize: 22, fontWeight: 700, color: "#b45309" },
   sub: { fontSize: 11, color: "#64748b", marginTop: 4 },
   section: { marginTop: 18 },
