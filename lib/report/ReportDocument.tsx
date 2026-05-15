@@ -131,8 +131,10 @@ export function buildReportElement(d: ReportData) {
         <Text style={s.footer}>
           Aydınlatma hesaplamaları TAHMİNÎDİR; resmi projeler için DIALux /
           Relux / Radiance ile doğrulayın. Referanslar: EN 12464-1 (iç mekân
-          aydınlatma), CIE Standart Overcast Sky, ASHRAE Clear Sky.
-          LightSim · MIT Lisansı.
+          aydınlatma), CIE Standart Overcast Sky, ASHRAE Clear Sky. LightSim ·
+          Tüm hakları Yörünge Kurumsal Danışmanlık Eğitim Ltd. Şti.&apos;ne
+          aittir ·
+          İletişim: Ercan TURGUT, Mekatronik Yük. Müh., 0532 015 98 16.
         </Text>
       </Page>
     </Document>

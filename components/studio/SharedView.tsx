@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
@@ -60,7 +61,14 @@ export function SharedView() {
     <div className="flex h-screen flex-col">
       <header className="flex h-14 items-center justify-between border-b bg-card px-4">
         <div className="flex items-center gap-3">
-          <Link href="/" className="font-bold">
+          <Link href="/" className="flex items-center gap-2 font-bold">
+            <Image
+              src="/logo.png"
+              alt="Yörünge"
+              width={28}
+              height={28}
+              className="rounded bg-white p-0.5"
+            />
             Light<span className="text-primary">Sim</span>
           </Link>
           <span className="text-sm text-muted-foreground">

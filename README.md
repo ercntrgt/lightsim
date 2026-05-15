@@ -45,6 +45,11 @@ npm run start    # üretim sunucusu
 Hesaplamalar **tahminîdir**; resmi projelerde DIALux/Relux/Radiance ile doğrulayın.
 Referanslar: **EN 12464-1**, **CIE Standart Overcast Sky**, **ASHRAE Clear Sky**.
 
-## Lisans
+## Lisans & Haklar
 
-MIT — bkz. [LICENSE](./LICENSE). Orijinal şartname: `docs-spec/lighting-sim-prompt.md`.
+Sistemin **tüm hakları Yörünge Kurumsal Danışmanlık Eğitim Limited Şirketi'ne**
+aittir (Tüm Hakları Saklıdır) — bkz. [LICENSE](./LICENSE).
+
+**İletişim:** Ercan TURGUT · Mekatronik Yüksek Mühendisi · 0532 015 98 16
+
+Orijinal şartname: `docs-spec/lighting-sim-prompt.md`.

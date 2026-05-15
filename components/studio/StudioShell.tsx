@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import {
@@ -144,8 +145,17 @@ export function StudioShell() {
       {/* Üst bar */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4">
         <div className="flex items-center gap-3">
-          <Link href="/" className="font-bold tracking-tight">
-            Light<span className="text-primary">Sim</span>
+          <Link href="/" className="flex items-center gap-2">
+            <Image
+              src="/logo.png"
+              alt="Yörünge"
+              width={32}
+              height={32}
+              className="rounded bg-white p-0.5"
+            />
+            <span className="font-bold tracking-tight">
+              Light<span className="text-primary">Sim</span>
+            </span>
           </Link>
           <span className="text-sm text-muted-foreground">
             {fileName ?? "Proje yok"}

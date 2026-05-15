@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "DXF tabanlı aydınlatma & günışığı simülasyon web uygulaması",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
