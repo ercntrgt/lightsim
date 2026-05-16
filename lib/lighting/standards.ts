@@ -18,8 +18,33 @@ export const MIN_UNIFORMITY = 0.6; // EN 12464-1 görev alanı Uo
 
 export function buildRecommendations(
   r: SimulationResult,
-  targetLux: number
+  targetLux: number,
+  mode: "combined" | "artificial" | "daylight" = "combined"
 ): string[] {
+  // Günışığı raporu: yapay armatür tavsiyeleri anlamsız — DF/günışığı odaklı.
+  if (mode === "daylight") {
+    const tips: string[] = [];
+    tips.push(
+      `Günışığı ortalaması ${Math.round(r.avg)} lx (yalnız doğal aydınlatma katkısı).`
+    );
+    if (r.daylightFactorPct > 0 && r.daylightFactorPct < 2)
+      tips.push(
+        `Daylight factor %${r.daylightFactorPct.toFixed(1)} düşük (<%2). ` +
+          "Pencere alanını artırmak doğal aydınlatmayı belirgin iyileştirir."
+      );
+    else if (r.daylightFactorPct >= 2)
+      tips.push(
+        `Daylight factor %${r.daylightFactorPct.toFixed(1)} — iyi doğal aydınlatma potansiyeli; ` +
+          "gündüz yapay aydınlatma kısılarak enerji tasarrufu sağlanabilir."
+      );
+    if (r.uniformityUo > 0 && r.uniformityUo < MIN_UNIFORMITY)
+      tips.push(
+        `Günışığı düzgünlüğü Uo=${r.uniformityUo.toFixed(2)} düşük — pencereler ` +
+          "tek cephede yoğun; karşı/yan cephe açıklığı dağılımı dengeler."
+      );
+    return tips;
+  }
+
   const tips: string[] = [];
   if (r.avg < targetLux) {
     const ratio = targetLux / Math.max(1, r.avg);

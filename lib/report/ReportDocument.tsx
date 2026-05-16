@@ -30,6 +30,8 @@ Font.register({
 // Türkçe kelimeleri tirelemeden bölünme/hatalı kırılmayı önle.
 Font.registerHyphenationCallback((word) => [word]);
 
+export type ReportMode = "combined" | "artificial" | "daylight";
+
 export interface ReportData {
   fileName: string | null;
   room: Room;
@@ -37,7 +39,27 @@ export interface ReportData {
   result: SimulationResult;
   targetKey: string;
   image?: string; // PNG dataURL (plan + heatmap)
+  /** Rapor kapsamı — her biri kendi içinde özerk. */
+  mode?: ReportMode;
 }
+
+const MODE_META: Record<
+  ReportMode,
+  { title: string; scope: string }
+> = {
+  combined: {
+    title: "LightSim — Aydınlatma Raporu",
+    scope: "Yapay aydınlatma + günışığı (birleşik)",
+  },
+  artificial: {
+    title: "LightSim — Yapay Aydınlatma Raporu",
+    scope: "Yalnız yapay aydınlatma (armatürler, günışığı hariç)",
+  },
+  daylight: {
+    title: "LightSim — Günışığı Raporu",
+    scope: "Yalnız günışığı katkısı (armatürler hariç)",
+  },
+};
 
 const s = StyleSheet.create({
   page: {
@@ -84,7 +106,9 @@ const s = StyleSheet.create({
 export function buildReportElement(d: ReportData) {
   const tgt = EN_TARGETS[d.targetKey] ?? EN_TARGETS.office;
   const r = d.result;
-  const tips = buildRecommendations(r, tgt.lux);
+  const mode: ReportMode = d.mode ?? "combined";
+  const meta = MODE_META[mode];
+  const tips = buildRecommendations(r, tgt.lux, mode);
   const M = (label: string, value: string) =>
     React.createElement(
       View,
@@ -97,7 +121,8 @@ export function buildReportElement(d: ReportData) {
     <Document>
       <Page size="A4" style={s.page}>
         <View>
-          <Text style={s.h1}>LightSim — Aydınlatma Raporu</Text>
+          <Text style={s.h1}>{meta.title}</Text>
+          <Text style={s.sub}>Kapsam: {meta.scope}</Text>
           <Text style={s.sub}>
             Proje: {d.fileName ?? "Adsız"} · Konum: {d.location.label} (
             {d.location.lat}, {d.location.lng}) · Tarih: {d.location.date}{" "}
@@ -125,19 +150,33 @@ export function buildReportElement(d: ReportData) {
         <View style={s.section}>
           <Text style={s.h2}>Sonuç Metrikleri</Text>
           <View style={[s.row, { flexWrap: "wrap" }]}>
-            {M("Ortalama aydınlık", `${fmt(r.avg)} lx`)}
+            {M(
+              mode === "daylight"
+                ? "Ortalama (günışığı)"
+                : mode === "artificial"
+                  ? "Ortalama (yapay)"
+                  : "Ortalama aydınlık",
+              `${fmt(r.avg)} lx`
+            )}
             {M("Min / Max", `${fmt(r.min)} / ${fmt(r.max)} lx`)}
             {M("Düzgünlük Uo (Emin/Eavg)", r.uniformityUo.toFixed(2))}
             {M("U1 (Emin/Emax)", r.uniformityU1.toFixed(2))}
-            {M("Daylight Factor", `% ${r.daylightFactorPct.toFixed(1)}`)}
-            {M("Lümen yöntemi (çapraz)", `${fmt(r.lumenMethodAvg)} lx`)}
+            {mode !== "artificial"
+              ? M("Daylight Factor", `% ${r.daylightFactorPct.toFixed(1)}`)
+              : null}
+            {mode !== "daylight"
+              ? M("Lümen yöntemi (çapraz)", `${fmt(r.lumenMethodAvg)} lx`)
+              : null}
           </View>
           <Text>
             Oda alanı: {fmt(d.room.area, 1)} m² · Hesap noktası:{" "}
             {r.grid.length} · Süre: {r.durationMs} ms ·{" "}
-            {r.avg >= tgt.lux
-              ? "Aydınlık hedefi karşılanıyor."
-              : "Aydınlık hedefin altında."}
+            {mode === "daylight"
+              ? `Daylight factor %${r.daylightFactorPct.toFixed(1)} (EN 12464-1 ` +
+                "yapay aydınlık hedefiyle doğrudan kıyaslanmaz)."
+              : r.avg >= tgt.lux
+                ? "Aydınlık hedefi karşılanıyor."
+                : "Aydınlık hedefin altında."}
           </Text>
         </View>
 

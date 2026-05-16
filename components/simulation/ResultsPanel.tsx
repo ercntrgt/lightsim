@@ -17,6 +17,11 @@ import { fmt } from "@/lib/utils";
 import { EN_TARGETS, MIN_UNIFORMITY } from "@/lib/lighting/standards";
 import { encodeShare } from "@/lib/share";
 import { renderResultPng } from "@/lib/viz/heatmapPng";
+import {
+  deriveModeResult,
+  hasContribution,
+  type ReportMode,
+} from "@/lib/lighting/modeResult";
 
 function Metric({
   label,
@@ -65,7 +70,9 @@ export function ResultsPanel() {
   const fail = useSimulationStore((s) => s.fail);
 
   const [target, setTarget] = useState("office");
-  const [busy, setBusy] = useState<"pdf" | "share" | null>(null);
+  const [busy, setBusy] = useState<
+    "pdf-artificial" | "pdf-daylight" | "share" | null
+  >(null);
 
   const saveHistory = async (r: typeof result) => {
     if (!room || !r) return;
@@ -119,11 +126,13 @@ export function ResultsPanel() {
   const avgPass = result ? result.avg >= tgt.lux : false;
   const uoPass = result ? result.uniformityUo >= MIN_UNIFORMITY : false;
 
-  const downloadPdf = async () => {
+  // Yapay / günışığı için ayrı, kendi içinde özerk PDF.
+  const downloadPdf = async (mode: Exclude<ReportMode, "combined">) => {
     if (!room || !result) return;
-    setBusy("pdf");
+    setBusy(mode === "artificial" ? "pdf-artificial" : "pdf-daylight");
     try {
-      const image = renderResultPng(room, result);
+      const modeResult = deriveModeResult(result, mode);
+      const image = renderResultPng(room, modeResult);
       const res = await fetch("/api/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,9 +140,10 @@ export function ResultsPanel() {
           fileName,
           room,
           location,
-          result,
+          result: modeResult,
           targetKey: target,
           image,
+          mode,
         }),
       });
       if (!res.ok) throw new Error("Rapor üretilemedi");
@@ -141,10 +151,15 @@ export function ResultsPanel() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `lightsim-rapor-${Date.now()}.pdf`;
+      const tag = mode === "artificial" ? "yapay-aydinlatma" : "gunisigi";
+      a.download = `lightsim-${tag}-${Date.now()}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-      success("PDF indirildi");
+      success(
+        mode === "artificial"
+          ? "Yapay aydınlatma PDF indirildi"
+          : "Günışığı PDF indirildi"
+      );
     } catch (e) {
       error("PDF hatası", e instanceof Error ? e.message : "");
     } finally {
@@ -308,25 +323,58 @@ export function ResultsPanel() {
 
           <Separator />
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              Rapor — her biri kendi içinde özerk PDF
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={
+                  busy !== null || !hasContribution(result, "artificial")
+                }
+                title={
+                  hasContribution(result, "artificial")
+                    ? "Yalnız armatür/yapay aydınlatma raporu"
+                    : "Yapay aydınlatma katkısı yok"
+                }
+                onClick={() => downloadPdf("artificial")}
+              >
+                {busy === "pdf-artificial" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                Yapay PDF
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={
+                  busy !== null || !hasContribution(result, "daylight")
+                }
+                title={
+                  hasContribution(result, "daylight")
+                    ? "Yalnız günışığı raporu"
+                    : "Günışığı katkısı yok (pencere yok / kapalı)"
+                }
+                onClick={() => downloadPdf("daylight")}
+              >
+                {busy === "pdf-daylight" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                Günışığı PDF
+              </Button>
+            </div>
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5"
-              disabled={busy !== null}
-              onClick={downloadPdf}
-            >
-              {busy === "pdf" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Download className="h-3.5 w-3.5" />
-              )}
-              PDF indir
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
+              className="w-full gap-1.5"
               disabled={busy !== null}
               onClick={sharePromise}
             >

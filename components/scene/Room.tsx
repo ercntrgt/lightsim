@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import type { Room as RoomT } from "@/types";
+import { simplifyWalls } from "@/lib/scene/wallSimplify";
 
 /** Plan (x,y,z_height) → Three (x, height, -y). */
 export const toThree = (x: number, y: number, h = 0): [number, number, number] => [
@@ -24,6 +25,10 @@ export function Room({ room }: { room: RoomT }) {
     return g;
   }, [room.outline]);
 
+  // SALT GÖRSEL: çift çizgi + kısa parça yığınını sürekli duvarlara indir.
+  // room.walls (simülasyon girdisi) değişmez.
+  const renderWalls = useMemo(() => simplifyWalls(room.walls), [room.walls]);
+
   const wallRefl = room.material.wall;
   const floorRefl = room.material.floor;
 
@@ -37,8 +42,8 @@ export function Room({ room }: { room: RoomT }) {
         />
       </mesh>
 
-      {/* Duvarlar — her segment bir kutu */}
-      {room.walls.map((w) => {
+      {/* Duvarlar — sadeleştirilmiş, sürekli segmentler */}
+      {renderWalls.map((w) => {
         const dx = w.end.x - w.start.x;
         const dy = w.end.y - w.start.y;
         const len = Math.hypot(dx, dy);
@@ -54,11 +59,13 @@ export function Room({ room }: { room: RoomT }) {
             castShadow
             receiveShadow
           >
-            <boxGeometry args={[len, w.height, w.thickness]} />
+            <boxGeometry args={[len, w.height, Math.max(0.08, w.thickness)]} />
             <meshStandardMaterial
               color={new THREE.Color().setScalar(0.35 + wallRefl * 0.5)}
+              roughness={0.85}
+              metalness={0}
               transparent
-              opacity={0.55}
+              opacity={0.7}
               side={THREE.DoubleSide}
             />
           </mesh>
