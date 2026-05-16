@@ -5,21 +5,49 @@ import { persist, createJSONStorage, type StateStorage } from "zustand/middlewar
 import type {
   DxfDocument,
   ElementType,
+  FloorRegion,
   Fixture,
   FixtureKey,
   Location,
+  ManualElements,
+  Point2D,
   ProjectState,
   Room,
   SimulationSettings,
 } from "@/types";
 import { autoClassify } from "@/lib/dxf/classifier";
+import { rescaleDxf } from "@/lib/dxf/parser";
 import {
   buildRoom,
   applyRoomParams,
+  applyManual,
+  detectFloors,
   extractFixturePositions,
   DEFAULT_ROOM_PARAMS,
+  type BuildOpts,
   type RoomParams,
 } from "@/lib/dxf/extruder";
+
+const emptyManual = (): ManualElements => ({
+  walls: [],
+  windows: [],
+  doors: [],
+});
+
+let _mid = 0;
+const mid = (pfx: string) =>
+  `m${pfx}${(++_mid).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/** Noktanın segmente uzaklığı (manuel eleman silme isabeti için). */
+function segDist(p: Point2D, a: Point2D, b: Point2D): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const l2 = dx * dx + dy * dy;
+  if (l2 < 1e-12) return Math.hypot(p.x - a.x, p.y - a.y);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
 
 const noopStorage: StateStorage = {
   getItem: () => null,
@@ -74,8 +102,27 @@ export const DEFAULT_SETTINGS: SimulationSettings = {
 
 interface ProjectActions {
   roomParams: RoomParams;
+  /** Gizli (3D/türetmeden hariç) katman adları. */
+  hiddenLayers: string[];
+  /** Çoklu kat tespitinde bulunan bölgeler. */
+  floors: FloorRegion[];
+  selectedFloorId: string | null;
+  /** Kullanıcının elle çizdiği duvar/pencere/kapı segmentleri. */
+  manual: ManualElements;
   setDxf: (fileName: string, dxf: DxfDocument) => void;
   setLayerType: (layer: string, type: ElementType) => void;
+  /** Yükleme sonrası DXF birimini değiştirir; varsa odayı yeniden kurar. */
+  setDxfUnit: (insCode: number) => void;
+  toggleLayerHidden: (layer: string) => void;
+  selectFloor: (id: string | null) => void;
+  addManualSeg: (
+    kind: "wall" | "window" | "door",
+    start: Point2D,
+    end: Point2D
+  ) => void;
+  /** Verilen noktaya en yakın manuel elemanı siler (varsa). */
+  removeManualNear: (p: Point2D, maxDist?: number) => void;
+  clearManual: () => void;
   buildRoomFromDxf: () => void;
   /** "fixture" katmanından armatür konumlarını çıkarıp yerleştirir. Adet döner. */
   placeFixturesFromDxf: (typeKey: FixtureKey) => number;
@@ -104,9 +151,52 @@ const blank = (): ProjectState => ({
 
 export const useProjectStore = create<Store>()(
   persist(
-    (set, get) => ({
+    (set, get) => {
+      const optsOf = (): BuildOpts => {
+        const s = get();
+        return {
+          hidden: new Set(s.hiddenLayers),
+          floor:
+            s.floors.find((f) => f.id === s.selectedFloorId)?.bbox ?? null,
+        };
+      };
+
+      // Oda'yı yeniden türetir: DXF varsa sıfırdan kurar, sonra manuel
+      // elemanları ekler. DXF yoksa (yeniden yükleme) mevcut odadan
+      // manuelleri ayıklayıp güncel manuel listesiyle yeniden ekler.
+      const recompute = () => {
+        const { dxf, layerMapping, roomParams, room, manual } = get();
+        if (dxf) {
+          const r = applyManual(
+            buildRoom(dxf, layerMapping, roomParams, optsOf()),
+            manual,
+            roomParams
+          );
+          set({ room: r });
+          return;
+        }
+        if (!room) return;
+        const ids = new Set<string>([
+          ...manual.walls.map((m) => m.id),
+          ...manual.windows.map((m) => m.id),
+          ...manual.doors.map((m) => m.id),
+        ]);
+        const base: Room = {
+          ...room,
+          walls: room.walls.filter((w) => !ids.has(w.id)),
+          windows: room.windows.filter((w) => !ids.has(w.id)),
+          doors: room.doors.filter((d) => !ids.has(d.id)),
+        };
+        set({ room: applyManual(base, manual, roomParams) });
+      };
+
+      return {
       ...blank(),
       roomParams: { ...DEFAULT_ROOM_PARAMS },
+      hiddenLayers: [],
+      floors: [],
+      selectedFloorId: null,
+      manual: emptyManual(),
 
       setDxf: (fileName, dxf) =>
         set({
@@ -114,21 +204,105 @@ export const useProjectStore = create<Store>()(
           dxf,
           layerMapping: autoClassify(dxf.layers),
           room: null,
+          hiddenLayers: [],
+          floors: [],
+          selectedFloorId: null,
+          manual: emptyManual(),
         }),
 
       setLayerType: (layer, type) =>
         set((s) => ({ layerMapping: { ...s.layerMapping, [layer]: type } })),
 
+      setDxfUnit: (insCode) => {
+        const { dxf, room } = get();
+        if (!dxf || dxf.insCode === insCode) return;
+        set({ dxf: rescaleDxf(dxf, insCode) });
+        if (room) recompute();
+      },
+
+      toggleLayerHidden: (layer) => {
+        set((s) => ({
+          hiddenLayers: s.hiddenLayers.includes(layer)
+            ? s.hiddenLayers.filter((l) => l !== layer)
+            : [...s.hiddenLayers, layer],
+        }));
+        if (get().room) recompute();
+      },
+
+      selectFloor: (id) => {
+        set({ selectedFloorId: id });
+        if (get().room) recompute();
+      },
+
+      addManualSeg: (kind, start, end) => {
+        if (Math.hypot(end.x - start.x, end.y - start.y) < 1e-3) return;
+        const seg = { id: mid(kind[0]), start, end };
+        set((s) => {
+          const key = (`${kind}s` as "walls" | "windows" | "doors");
+          return { manual: { ...s.manual, [key]: [...s.manual[key], seg] } };
+        });
+        recompute();
+      },
+
+      removeManualNear: (p, maxDist = 0.6) => {
+        const { manual } = get();
+        let bestId: string | null = null;
+        let bestD = maxDist;
+        const scan = (segs: { id: string; start: Point2D; end: Point2D }[]) => {
+          for (const m of segs) {
+            const d = segDist(p, m.start, m.end);
+            if (d < bestD) {
+              bestD = d;
+              bestId = m.id;
+            }
+          }
+        };
+        scan(manual.walls);
+        scan(manual.windows);
+        scan(manual.doors);
+        if (!bestId) return;
+        set((s) => ({
+          manual: {
+            walls: s.manual.walls.filter((m) => m.id !== bestId),
+            windows: s.manual.windows.filter((m) => m.id !== bestId),
+            doors: s.manual.doors.filter((m) => m.id !== bestId),
+          },
+        }));
+        recompute();
+      },
+
+      clearManual: () => {
+        set({ manual: emptyManual() });
+        recompute();
+      },
+
       buildRoomFromDxf: () => {
-        const { dxf, layerMapping, roomParams } = get();
+        const { dxf, layerMapping, hiddenLayers, selectedFloorId } = get();
         if (!dxf) return;
-        set({ room: buildRoom(dxf, layerMapping, roomParams) });
+        const floors = detectFloors(
+          dxf,
+          layerMapping,
+          new Set(hiddenLayers)
+        );
+        const selId =
+          floors.length > 1
+            ? (floors.some((f) => f.id === selectedFloorId)
+                ? selectedFloorId
+                : floors[0].id)
+            : null;
+        set({ floors, selectedFloorId: selId });
+        recompute();
       },
 
       placeFixturesFromDxf: (typeKey) => {
         const { dxf, layerMapping, roomParams, fixtures } = get();
         if (!dxf) return 0;
-        const pts = extractFixturePositions(dxf, layerMapping);
+        const pts = extractFixturePositions(
+          dxf,
+          layerMapping,
+          0.4,
+          optsOf()
+        );
         // Önceki DXF kaynaklı armatürleri (id "dxf" ile başlayan) değiştir,
         // elle yerleştirilenleri ("fx") koru.
         const manual = fixtures.filter((f) => !f.id.startsWith("dxf"));
@@ -167,10 +341,29 @@ export const useProjectStore = create<Store>()(
         set((s) => ({ settings: { ...s.settings, ...p } })),
 
       loadShared: (room, fixtures, location, settings) =>
-        set({ room, fixtures, location, settings, dxf: null }),
+        set({
+          room,
+          fixtures,
+          location,
+          settings,
+          dxf: null,
+          hiddenLayers: [],
+          floors: [],
+          selectedFloorId: null,
+          manual: emptyManual(),
+        }),
 
-      reset: () => set({ ...blank(), roomParams: { ...DEFAULT_ROOM_PARAMS } }),
-    }),
+      reset: () =>
+        set({
+          ...blank(),
+          roomParams: { ...DEFAULT_ROOM_PARAMS },
+          hiddenLayers: [],
+          floors: [],
+          selectedFloorId: null,
+          manual: emptyManual(),
+        }),
+      };
+    },
     {
       name: "lightsim-project",
       storage: createJSONStorage(() =>
@@ -188,6 +381,9 @@ export const useProjectStore = create<Store>()(
         location: s.location,
         settings: s.settings,
         roomParams: s.roomParams,
+        hiddenLayers: s.hiddenLayers,
+        selectedFloorId: s.selectedFloorId,
+        manual: s.manual,
       }),
     }
   )

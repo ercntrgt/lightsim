@@ -50,6 +50,8 @@ export interface DxfDocument {
   /** Ham koordinatlar zaten metreye çevrilip orijine taşındı. */
   unitScale: number;
   rawUnit: string;
+  /** Etkin $INSUNITS kodu (algılanan veya kullanıcı override'ı). */
+  insCode: number;
 }
 
 export type LayerMapping = Record<string, ElementType>;
@@ -98,6 +100,26 @@ export interface Room {
   maintenanceFactor: number; // MF (0..1)
   area: number; // m² (shoelace)
   workplaneHeight: number; // çalışma düzlemi yüksekliği (m)
+}
+
+/** Çoklu kat/bölge DXF'inde tespit edilen bağımsız bir plan kümesi. */
+export interface FloorRegion {
+  id: string;
+  label: string;
+  bbox: BBox;
+  area: number; // bölgedeki en büyük kapalı duvar poligonu (m²)
+}
+
+/** Kullanıcının 2D plan üzerinde elle çizdiği segment (duvar/pencere/kapı). */
+export interface ManualSeg {
+  id: string;
+  start: Point2D;
+  end: Point2D;
+}
+export interface ManualElements {
+  walls: ManualSeg[];
+  windows: ManualSeg[];
+  doors: ManualSeg[];
 }
 
 export type FixtureKey =

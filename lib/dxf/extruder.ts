@@ -3,8 +3,12 @@
 // Bu, projectStore.buildRoomFromDxf() köprüsünün çekirdeğidir.
 
 import type {
+  BBox,
   DxfDocument,
+  DxfEntity,
+  FloorRegion,
   LayerMapping,
+  ManualElements,
   Point2D,
   Room,
   Wall,
@@ -12,6 +16,12 @@ import type {
   Door,
   Material,
 } from "@/types";
+
+/** buildRoom/extract filtreleri: gizli katmanlar + seçili kat bölgesi. */
+export interface BuildOpts {
+  hidden?: Set<string>;
+  floor?: BBox | null;
+}
 
 export interface RoomParams {
   wallHeight: number;
@@ -66,23 +76,112 @@ function pointToSegment(p: Point2D, a: Point2D, b: Point2D): number {
 let _wid = 0;
 const wid = (pfx: string) => `${pfx}${(++_wid).toString(36)}`;
 
+const centroid = (pts: Point2D[]): Point2D => {
+  let sx = 0,
+    sy = 0;
+  for (const p of pts) {
+    sx += p.x;
+    sy += p.y;
+  }
+  return { x: sx / pts.length, y: sy / pts.length };
+};
+
+const ptsBBox = (pts: Point2D[]): BBox => {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const p of pts) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { min: { x: minX, y: minY }, max: { x: maxX, y: maxY } };
+};
+
+const inBBox = (p: Point2D, b: BBox, m = 1e-6): boolean =>
+  p.x >= b.min.x - m &&
+  p.x <= b.max.x + m &&
+  p.y >= b.min.y - m &&
+  p.y <= b.max.y + m;
+
+const bboxOverlap = (a: BBox, b: BBox, gap: number): boolean =>
+  a.min.x - gap <= b.max.x &&
+  a.max.x + gap >= b.min.x &&
+  a.min.y - gap <= b.max.y &&
+  a.max.y + gap >= b.min.y;
+
+/** Tür eşlemesi + gizli katman + (varsa) kat bölgesine göre entity süzer. */
+function pickEntities(
+  doc: DxfDocument,
+  mapping: LayerMapping,
+  type: string,
+  opts?: BuildOpts
+): DxfEntity[] {
+  const hidden = opts?.hidden;
+  const floor = opts?.floor;
+  return doc.entities.filter((e) => {
+    if (mapping[e.layer] !== type) return false;
+    if (hidden?.has(e.layer)) return false;
+    if (floor && e.points.length && !inBBox(centroid(e.points), floor, 0.5))
+      return false;
+    return true;
+  });
+}
+
+/** Bir açıklık segmentinin orta noktasına en yakın duvarın id'si. */
+export function nearestWallId(
+  walls: Wall[],
+  a: Point2D,
+  b: Point2D
+): string {
+  if (!walls.length) return "";
+  const m = mid(a, b);
+  let best = walls[0].id;
+  let bestD = Infinity;
+  for (const w of walls) {
+    const d = pointToSegment(m, w.start, w.end);
+    if (d < bestD) {
+      bestD = d;
+      best = w.id;
+    }
+  }
+  return best;
+}
+
 export function buildRoom(
   doc: DxfDocument,
   mapping: LayerMapping,
-  params: RoomParams = DEFAULT_ROOM_PARAMS
+  params: RoomParams = DEFAULT_ROOM_PARAMS,
+  opts?: BuildOpts
 ): Room {
-  const wallEnts = doc.entities.filter((e) => mapping[e.layer] === "wall");
-  const winEnts = doc.entities.filter((e) => mapping[e.layer] === "window");
-  const doorEnts = doc.entities.filter((e) => mapping[e.layer] === "door");
+  const wallEnts = pickEntities(doc, mapping, "wall", opts);
+  const winEnts = pickEntities(doc, mapping, "window", opts);
+  const doorEnts = pickEntities(doc, mapping, "door", opts);
 
-  // 1) Duvar segmentleri.
+  // 1) Duvar segmentleri. Aynı segment birden çok entity'de tekrar
+  //    çizilmiş olabilir (kapalı poligonun kapanışı, üst üste binen
+  //    poliçizgiler) — yön bağımsız tekilleştir; 3D'de hayalet/çift
+  //    duvar kutularını önler. (outline/area bundan etkilenmez.)
   const walls: Wall[] = [];
+  const SNAP = 1e-3; // 1 mm
+  const seen = new Set<string>();
+  const segKey = (a: Point2D, b: Point2D) => {
+    const q = (v: number) => Math.round(v / SNAP);
+    const ka = `${q(a.x)},${q(a.y)}`;
+    const kb = `${q(b.x)},${q(b.y)}`;
+    return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`; // yön bağımsız
+  };
   for (const e of wallEnts) {
     const pts = e.points;
     for (let i = 0; i < pts.length - 1; i++) {
       const s = pts[i];
       const t = pts[i + 1];
       if (dist(s, t) < 1e-4) continue;
+      const key = segKey(s, t);
+      if (seen.has(key)) continue;
+      seen.add(key);
       walls.push({
         id: wid("w"),
         start: { ...s },
@@ -133,35 +232,18 @@ export function buildRoom(
   }
   const area = polygonArea(outline);
 
-  // 3) Açıklığı en yakın duvara bağla.
-  const nearestWall = (a: Point2D, b: Point2D): string => {
-    if (!walls.length) return "";
-    const m = mid(a, b);
-    let best = walls[0].id;
-    let bestD = Infinity;
-    for (const w of walls) {
-      const d = pointToSegment(m, w.start, w.end);
-      if (d < bestD) {
-        bestD = d;
-        best = w.id;
-      }
-    }
-    return best;
-  };
-
+  // 3) Açıklığı en yakın duvara bağla. Cam yüksekliği parapetten duvar
+  //    üstüne kadar OTOMATİK: headHeight = wallHeight (sabit lento yok).
   const windows: WindowOpening[] = winEnts.map((e) => {
     const a = e.points[0];
     const b = e.points[e.points.length - 1];
     return {
       id: wid("win"),
-      wallId: nearestWall(a, b),
+      wallId: nearestWallId(walls, a, b),
       start: { ...a },
       end: { ...b },
       sillHeight: params.sillHeight,
-      headHeight: Math.max(
-        params.sillHeight + 0.3,
-        params.wallHeight - 0.3
-      ),
+      headHeight: params.wallHeight,
       transmittance: params.glassTransmittance,
     };
   });
@@ -171,7 +253,7 @@ export function buildRoom(
     const b = e.points[e.points.length - 1];
     return {
       id: wid("dr"),
-      wallId: nearestWall(a, b),
+      wallId: nearestWallId(walls, a, b),
       start: { ...a },
       end: { ...b },
       height: params.doorHeight,
@@ -208,13 +290,159 @@ export function applyRoomParams(room: Room, params: RoomParams): Room {
     windows: room.windows.map((win) => ({
       ...win,
       sillHeight: params.sillHeight,
-      headHeight: Math.max(
-        params.sillHeight + 0.3,
-        params.wallHeight - 0.3
-      ),
+      headHeight: params.wallHeight, // parapetten tavana otomatik
       transmittance: params.glassTransmittance,
     })),
   };
+}
+
+/**
+ * Kullanıcının elle çizdiği segmentleri Room'a ekler. Duvarlar/açıklıklar
+ * güncel parametrelerle üretilir; pencere/kapı en yakın duvara bağlanır
+ * (manuel duvarlar da dahil). outline/area DXF'ten geldiği gibi kalır —
+ * manuel duvarlar ek engel/yüzey olarak eklenir.
+ */
+export function applyManual(
+  room: Room,
+  manual: ManualElements,
+  params: RoomParams
+): Room {
+  if (
+    !manual.walls.length &&
+    !manual.windows.length &&
+    !manual.doors.length
+  )
+    return room;
+
+  const mWalls: Wall[] = manual.walls.map((s) => ({
+    id: s.id,
+    start: { ...s.start },
+    end: { ...s.end },
+    height: params.wallHeight,
+    thickness: params.wallThickness,
+  }));
+  const walls = [...room.walls, ...mWalls];
+
+  const mWindows: WindowOpening[] = manual.windows.map((s) => ({
+    id: s.id,
+    wallId: nearestWallId(walls, s.start, s.end),
+    start: { ...s.start },
+    end: { ...s.end },
+    sillHeight: params.sillHeight,
+    headHeight: params.wallHeight,
+    transmittance: params.glassTransmittance,
+  }));
+  const mDoors: Door[] = manual.doors.map((s) => ({
+    id: s.id,
+    wallId: nearestWallId(walls, s.start, s.end),
+    start: { ...s.start },
+    end: { ...s.end },
+    height: params.doorHeight,
+  }));
+
+  return {
+    ...room,
+    walls,
+    windows: [...room.windows, ...mWindows],
+    doors: [...room.doors, ...mDoors],
+  };
+}
+
+/**
+ * Çoklu kat / yan yana çizilmiş plan kümelerini tespit eder. Duvar
+ * entity'lerinin sınır kutuları (gap toleranslı) çakışanlar tek bölgeye
+ * birleştirilir (union-find). Birden az bölge varsa [] döner (tek kat).
+ */
+export function detectFloors(
+  doc: DxfDocument,
+  mapping: LayerMapping,
+  hidden?: Set<string>
+): FloorRegion[] {
+  const ents = doc.entities.filter(
+    (e) =>
+      mapping[e.layer] === "wall" &&
+      !hidden?.has(e.layer) &&
+      e.points.length > 1
+  );
+  if (ents.length < 2) return [];
+
+  const boxes = ents.map((e) => ptsBBox(e.points));
+  const diag = Math.hypot(
+    doc.bbox.max.x - doc.bbox.min.x,
+    doc.bbox.max.y - doc.bbox.min.y
+  );
+  // Aynı kata ait parçalar birbirine yakın; katlar arası boşluk büyük.
+  const gap = Math.max(0.5, diag * 0.02);
+
+  const parent = ents.map((_, i) => i);
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]];
+      i = parent[i];
+    }
+    return i;
+  };
+  const union = (a: number, b: number) => {
+    parent[find(a)] = find(b);
+  };
+  for (let i = 0; i < ents.length; i++)
+    for (let j = i + 1; j < ents.length; j++)
+      if (bboxOverlap(boxes[i], boxes[j], gap)) union(i, j);
+
+  const groups = new Map<number, number[]>();
+  for (let i = 0; i < ents.length; i++) {
+    const r = find(i);
+    (groups.get(r) ?? groups.set(r, []).get(r)!).push(i);
+  }
+  if (groups.size < 2) return [];
+
+  const regions: FloorRegion[] = [];
+  let n = 0;
+  for (const idxs of Array.from(groups.values())) {
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    let bestArea = 0;
+    for (const i of idxs) {
+      const e = ents[i];
+      const bb = boxes[i];
+      minX = Math.min(minX, bb.min.x);
+      minY = Math.min(minY, bb.min.y);
+      maxX = Math.max(maxX, bb.max.x);
+      maxY = Math.max(maxY, bb.max.y);
+      const closed =
+        e.points.length >= 3 &&
+        (e.closed ||
+          dist(e.points[0], e.points[e.points.length - 1]) < 1e-3);
+      if (closed) bestArea = Math.max(bestArea, polygonArea(e.points));
+    }
+    const bbox: BBox = {
+      min: { x: minX, y: minY },
+      max: { x: maxX, y: maxY },
+    };
+    n += 1;
+    regions.push({
+      id: `floor${n}`,
+      label: `Bölge ${n} · ${(maxX - minX).toFixed(1)}×${(
+        maxY - minY
+      ).toFixed(1)} m${bestArea ? ` · ${bestArea.toFixed(0)} m²` : ""}`,
+      bbox,
+      area: bestArea,
+    });
+  }
+  // Büyük alan/boyut önce.
+  regions.sort(
+    (a, b) =>
+      b.area - a.area ||
+      (b.bbox.max.x - b.bbox.min.x) * (b.bbox.max.y - b.bbox.min.y) -
+        (a.bbox.max.x - a.bbox.min.x) * (a.bbox.max.y - a.bbox.min.y)
+  );
+  return regions.map((r, i) => ({
+    ...r,
+    id: `floor${i + 1}`,
+    label: r.label.replace(/^Bölge \d+/, `Bölge ${i + 1}`),
+  }));
 }
 
 /**
@@ -225,19 +453,14 @@ export function applyRoomParams(room: Room, params: RoomParams): Room {
 export function extractFixturePositions(
   doc: DxfDocument,
   mapping: LayerMapping,
-  clusterDist = 0.4
+  clusterDist = 0.4,
+  opts?: BuildOpts
 ): Point2D[] {
-  const ents = doc.entities.filter((e) => mapping[e.layer] === "fixture");
+  const ents = pickEntities(doc, mapping, "fixture", opts);
   const centroids: Point2D[] = [];
   for (const e of ents) {
     if (!e.points.length) continue;
-    let sx = 0,
-      sy = 0;
-    for (const p of e.points) {
-      sx += p.x;
-      sy += p.y;
-    }
-    centroids.push({ x: sx / e.points.length, y: sy / e.points.length });
+    centroids.push(centroid(e.points));
   }
   // Basit kümeleme.
   const clusters: { x: number; y: number; n: number }[] = [];

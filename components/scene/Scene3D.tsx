@@ -7,12 +7,14 @@ import {
   GizmoHelper,
   GizmoViewport,
   Grid,
+  Bounds,
   Stats,
 } from "@react-three/drei";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSimulationStore } from "@/stores/simulationStore";
 import { Room } from "./Room";
 import { Window } from "./Window";
+import { Door } from "./Door";
 import { Fixture } from "./Fixture";
 import { HeatmapPlane } from "./HeatmapPlane";
 
@@ -39,6 +41,12 @@ export default function Scene3D() {
     };
   }, [room]);
 
+  // Kamerayı yalnızca oda geometrisi/yüksekliği değişince yeniden
+  // kadrajla (Bounds remount). Armatür ekleme/taşımada kamera zıplamaz.
+  const fitKey = room
+    ? `${room.outline.length}:${room.area.toFixed(3)}:${room.wallHeight}`
+    : "none";
+
   return (
     <Canvas
       shadows
@@ -55,21 +63,26 @@ export default function Scene3D() {
         shadow-mapSize={[1024, 1024]}
       />
 
-      <group position={[-center[0], 0, -center[2]]}>
-        {room && <Room room={room} />}
-        {room?.windows.map((w) => (
-          <Window key={w.id} win={w} />
-        ))}
-        {fixtures.map((f) => (
-          <Fixture key={f.id} fixture={f} />
-        ))}
-        {result && room && (
-          <HeatmapPlane
-            result={result}
-            workplaneHeight={room.workplaneHeight}
-          />
-        )}
-      </group>
+      <Bounds key={fitKey} fit clip margin={1.2}>
+        <group position={[-center[0], 0, -center[2]]}>
+          {room && <Room room={room} />}
+          {room?.windows.map((w) => (
+            <Window key={w.id} win={w} />
+          ))}
+          {room?.doors.map((d) => (
+            <Door key={d.id} door={d} />
+          ))}
+          {fixtures.map((f) => (
+            <Fixture key={f.id} fixture={f} />
+          ))}
+          {result && room && (
+            <HeatmapPlane
+              result={result}
+              workplaneHeight={room.workplaneHeight}
+            />
+          )}
+        </group>
+      </Bounds>
 
       <Grid
         args={[40, 40]}
@@ -81,7 +94,7 @@ export default function Scene3D() {
         cellColor="#334155"
         sectionColor="#475569"
       />
-      <OrbitControls makeDefault target={[0, 1, 0]} />
+      <OrbitControls makeDefault />
       <GizmoHelper alignment="bottom-right" margin={[60, 60]}>
         <GizmoViewport labelColor="white" axisHeadScale={1} />
       </GizmoHelper>

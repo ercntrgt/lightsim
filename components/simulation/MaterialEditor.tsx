@@ -9,17 +9,19 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 
+// Yapay üst/alt kapaklar kaldırıldı; yalnızca hesabı/geometriyi bozacak
+// fiziksel sınırlar tutuluyor: oranlar 0..1, uzunluklar pozitif.
 const schema = z.object({
-  wallHeight: z.coerce.number().min(2).max(6),
-  wallThickness: z.coerce.number().min(0.05).max(0.6),
-  sillHeight: z.coerce.number().min(0).max(2),
-  glassTransmittance: z.coerce.number().min(0.1).max(0.95),
-  doorHeight: z.coerce.number().min(1.8).max(2.6),
-  workplaneHeight: z.coerce.number().min(0).max(1.2),
-  maintenanceFactor: z.coerce.number().min(0.4).max(1),
-  ceiling: z.coerce.number().min(0).max(0.95),
-  wall: z.coerce.number().min(0).max(0.95),
-  floor: z.coerce.number().min(0).max(0.95),
+  wallHeight: z.coerce.number().min(0.5),
+  wallThickness: z.coerce.number().min(0.01),
+  sillHeight: z.coerce.number().min(0),
+  glassTransmittance: z.coerce.number().min(0.01).max(1),
+  doorHeight: z.coerce.number().min(0.1),
+  workplaneHeight: z.coerce.number().min(0),
+  maintenanceFactor: z.coerce.number().min(0.05).max(1),
+  ceiling: z.coerce.number().min(0).max(1),
+  wall: z.coerce.number().min(0).max(1),
+  floor: z.coerce.number().min(0).max(1),
 });
 type FormVals = z.infer<typeof schema>;
 
@@ -99,7 +101,7 @@ export function MaterialEditor() {
       <Slider
         value={Number(watch(name) ?? 0)}
         min={0}
-        max={0.95}
+        max={1}
         step={0.05}
         onValueChange={(v) =>
           setValue(name, v, { shouldValidate: true })
@@ -119,10 +121,24 @@ export function MaterialEditor() {
         {num("wallHeight", "Duvar yüks.", 0.1, "m")}
         {num("wallThickness", "Duvar kalınl.", 0.05, "m")}
         {num("sillHeight", "Parapet", 0.05, "m")}
+        {num("doorHeight", "Kapı yüks.", 0.05, "m")}
         {num("glassTransmittance", "Cam τ", 0.05)}
         {num("workplaneHeight", "Çalışma düzl.", 0.05, "m")}
         {num("maintenanceFactor", "Bakım fak. (MF)", 0.05)}
       </div>
+      <p className="rounded-md bg-sky-500/10 p-2 text-xs text-sky-700">
+        Cam yüksekliği parapetten tavana otomatik hesaplanır:{" "}
+        <b>
+          {Math.max(
+            0,
+            Number(watch("wallHeight") ?? 0) -
+              Number(watch("sillHeight") ?? 0)
+          ).toFixed(2)}{" "}
+          m
+        </b>{" "}
+        (duvar yüks. − parapet). Parapeti değiştirince cam yüksekliği
+        kendiliğinden güncellenir.
+      </p>
       <div className="space-y-3 rounded-lg border p-3">
         {refl("ceiling", "Tavan")}
         {refl("wall", "Duvar")}

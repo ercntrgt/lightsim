@@ -23,7 +23,7 @@ import type {
 } from "@/types";
 
 /** $INSUNITS kodu → metre ölçeği. Bilinmiyorsa mimari varsayım: mm. */
-const UNIT_SCALE: Record<number, { scale: number; name: string }> = {
+export const UNIT_SCALE: Record<number, { scale: number; name: string }> = {
   0: { scale: 0.001, name: "birimsiz (mm varsayıldı)" },
   1: { scale: 0.0254, name: "inç" },
   2: { scale: 0.3048, name: "feet" },
@@ -32,6 +32,15 @@ const UNIT_SCALE: Record<number, { scale: number; name: string }> = {
   6: { scale: 1, name: "m" },
   8: { scale: 1e-6, name: "mikron" },
 };
+
+/** Kullanıcının yükleme sonrası seçebileceği birimler (LayerMapper). */
+export const UNIT_OPTIONS: { code: number; label: string }[] = [
+  { code: 4, label: "Milimetre (mm)" },
+  { code: 5, label: "Santimetre (cm)" },
+  { code: 6, label: "Metre (m)" },
+  { code: 1, label: "İnç (in)" },
+  { code: 2, label: "Feet (ft)" },
+];
 
 const ARC_SEG_DEG = 6; // arc/circle tessellation çözünürlüğü
 
@@ -292,6 +301,37 @@ export function parseDxf(text: string, unitOverride?: number): ParseResult {
     bbox,
     unitScale: scale,
     rawUnit: unit.name,
+    insCode,
   };
   return { doc, warnings };
+}
+
+/**
+ * Yükleme sonrası birim düzeltmesi. Geometri zaten metreye çevrilip köşesi
+ * orijine (0,0) oturtulduğundan, tüm noktaları `k = yeniÖlçek / eskiÖlçek`
+ * ile çarpmak orijin köşesini sabit tutarak planı orantılı yeniden
+ * ölçekler — yeniden parse gerektirmez. Yeni bir DxfDocument döner.
+ */
+export function rescaleDxf(doc: DxfDocument, insCode: number): DxfDocument {
+  const unit = UNIT_SCALE[insCode] ?? UNIT_SCALE[0];
+  const k = unit.scale / doc.unitScale;
+  if (!Number.isFinite(k) || k <= 0 || Math.abs(k - 1) < 1e-12) {
+    return { ...doc, insCode, unitScale: unit.scale, rawUnit: unit.name };
+  }
+  const entities = doc.entities.map((e) => ({
+    ...e,
+    points: e.points.map((p) => ({ x: p.x * k, y: p.y * k })),
+    radius: e.radius != null ? e.radius * k : e.radius,
+  }));
+  return {
+    ...doc,
+    entities,
+    bbox: {
+      min: { x: doc.bbox.min.x * k, y: doc.bbox.min.y * k },
+      max: { x: doc.bbox.max.x * k, y: doc.bbox.max.y * k },
+    },
+    unitScale: unit.scale,
+    rawUnit: unit.name,
+    insCode,
+  };
 }

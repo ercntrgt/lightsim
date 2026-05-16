@@ -6,7 +6,18 @@ import type { ElementType } from "@/types";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Layers, Wand2, CheckCircle2, Circle } from "lucide-react";
+import { UNIT_OPTIONS, UNIT_SCALE } from "@/lib/dxf/parser";
+import { detectFloors } from "@/lib/dxf/extruder";
+import {
+  Layers,
+  Wand2,
+  CheckCircle2,
+  Circle,
+  Ruler,
+  Building2,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 const LABELS: Record<ElementType, string> = {
   wall: "Duvar",
@@ -20,6 +31,11 @@ export function LayerMapper() {
   const dxf = useProjectStore((s) => s.dxf);
   const mapping = useProjectStore((s) => s.layerMapping);
   const setLayerType = useProjectStore((s) => s.setLayerType);
+  const setDxfUnit = useProjectStore((s) => s.setDxfUnit);
+  const hiddenLayers = useProjectStore((s) => s.hiddenLayers);
+  const toggleLayerHidden = useProjectStore((s) => s.toggleLayerHidden);
+  const selectedFloorId = useProjectStore((s) => s.selectedFloorId);
+  const selectFloor = useProjectStore((s) => s.selectFloor);
   const buildRoom = useProjectStore((s) => s.buildRoomFromDxf);
 
   const counts = useMemo(() => {
@@ -41,7 +57,31 @@ export function LayerMapper() {
       });
   }, [dxf, counts, mapping]);
 
+  // Çoklu kat/bölge tespiti — gizli katmanlar hariç, canlı.
+  const liveFloors = useMemo(
+    () =>
+      dxf ? detectFloors(dxf, mapping, new Set(hiddenLayers)) : [],
+    [dxf, mapping, hiddenLayers]
+  );
+
   if (!dxf) return null;
+
+  const activeFloorId =
+    selectedFloorId && liveFloors.some((f) => f.id === selectedFloorId)
+      ? selectedFloorId
+      : (liveFloors[0]?.id ?? null);
+
+  const planW = dxf.bbox.max.x - dxf.bbox.min.x;
+  const planD = dxf.bbox.max.y - dxf.bbox.min.y;
+  const maxDim = Math.max(planW, planD);
+  // Select değeri: dxf'in etkin ölçeğine eşleşen birim seçeneği.
+  const selectedUnit =
+    UNIT_OPTIONS.find((o) => o.code === dxf.insCode) ??
+    UNIT_OPTIONS.find(
+      (o) => UNIT_SCALE[o.code]?.scale === dxf.unitScale
+    ) ??
+    UNIT_OPTIONS[0];
+  const unitLooksOff = maxDim < 0.5 || maxDim > 300;
 
   const hasWall = layers.some((l) => mapping[l] === "wall");
   const hasWindow = layers.some((l) => mapping[l] === "window");
@@ -81,6 +121,69 @@ export function LayerMapper() {
         sayılır — hepsini eşlemek zorunda değilsiniz.
       </p>
 
+      {/* Birim / ölçek — yanlış birim 3D'de duvar oranlarını bozar */}
+      <div
+        className={
+          "space-y-2 rounded-md border p-2.5 " +
+          (unitLooksOff ? "border-amber-300 bg-amber-50" : "bg-card")
+        }
+      >
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Ruler className="h-4 w-4 text-primary" />
+          Çizim birimi
+        </div>
+        <Select
+          value={String(selectedUnit.code)}
+          onChange={(e) => setDxfUnit(Number(e.target.value))}
+          className="h-8 w-full text-xs"
+        >
+          {UNIT_OPTIONS.map((o) => (
+            <option key={o.code} value={o.code}>
+              {o.label}
+            </option>
+          ))}
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Plan boyutu:{" "}
+          <b>
+            {planW.toFixed(2)} × {planD.toFixed(2)} m
+          </b>
+        </p>
+        {unitLooksOff && (
+          <p className="text-xs text-amber-700">
+            Bu boyut bir oda için olağandışı — çizim birimi yanlış olabilir.
+            Doğru birimi seçin, aksi halde 3D&apos;de duvar yükseklikleri
+            orantısız görünür.
+          </p>
+        )}
+      </div>
+
+      {/* Çoklu kat / bölge — yan yana veya ayrı çizilmiş planlar */}
+      {liveFloors.length > 1 && (
+        <div className="space-y-2 rounded-md border border-violet-300 bg-violet-50 p-2.5">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Building2 className="h-4 w-4 text-violet-600" />
+            Çoklu kat algılandı ({liveFloors.length} bölge)
+          </div>
+          <Select
+            value={activeFloorId ?? ""}
+            onChange={(e) => selectFloor(e.target.value)}
+            className="h-8 w-full text-xs"
+          >
+            {liveFloors.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </Select>
+          <p className="text-xs text-violet-700">
+            Yalnızca seçilen bölge odaya dönüştürülür. Diğer katları
+            tamamen yok saymak için katmanlarını göz simgesiyle de
+            gizleyebilirsiniz.
+          </p>
+        </div>
+      )}
+
       {/* Eşleme checklist'i */}
       <div className="space-y-1 rounded-md border bg-card p-2.5">
         <p className="mb-1 text-xs font-medium text-muted-foreground">
@@ -118,20 +221,38 @@ export function LayerMapper() {
       <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
         {layers.map((layer) => {
           const t = mapping[layer] ?? "ignore";
+          const hidden = hiddenLayers.includes(layer);
           return (
             <div
               key={layer}
               className={
                 "flex items-center gap-2 rounded-md border px-2.5 py-1.5 " +
-                (t === "ignore" ? "bg-muted/30" : "bg-card")
+                (hidden
+                  ? "border-dashed bg-muted/50 opacity-60"
+                  : t === "ignore"
+                    ? "bg-muted/30"
+                    : "bg-card")
               }
             >
+              <button
+                type="button"
+                onClick={() => toggleLayerHidden(layer)}
+                title={hidden ? "Katmanı göster" : "Katmanı gizle"}
+                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                {hidden ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium" title={layer}>
                   {layer}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {counts[layer] ?? 0} eleman
+                  {hidden && " · gizli"}
                 </p>
               </div>
               <Select

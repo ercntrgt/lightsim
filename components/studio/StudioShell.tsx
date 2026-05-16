@@ -269,6 +269,7 @@ export function StudioShell() {
               <Scene3D />
             ) : dxf ? (
               <DxfViewer2D
+                allowEdit={step === "layers" || step === "room"}
                 onPlace={
                   step === "fixtures" && fixtureKey
                     ? placeFixture
