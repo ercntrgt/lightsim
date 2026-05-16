@@ -19,9 +19,13 @@ import {
   Grid2x2,
   ChevronLeft,
   ChevronRight,
+  History as HistoryIcon,
+  ShieldCheck,
+  LogOut,
 } from "lucide-react";
 import { useSimulationStore } from "@/stores/simulationStore";
 import { useProjectStore } from "@/stores/projectStore";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { parseDxf } from "@/lib/dxf/parser";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -79,6 +83,7 @@ export function StudioShell() {
   const roomParams = useProjectStore((s) => s.roomParams);
   const result = useSimulationStore((s) => s.result);
   const clearSim = useSimulationStore((s) => s.clear);
+  const { user, logout } = useAuth();
 
   const [step, setStep] = useState<StepId>("upload");
   const [sampleTried, setSampleTried] = useState(false);
@@ -168,20 +173,59 @@ export function StudioShell() {
             {fileName ?? "Proje yok"}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-2"
-          onClick={() => {
-            reset();
-            clearSim();
-            setStep("upload");
-            setView("plan");
-            setSampleTried(true);
-          }}
-        >
-          <RotateCcw className="h-4 w-4" /> Sıfırla
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2"
+            onClick={() => {
+              reset();
+              clearSim();
+              setStep("upload");
+              setView("plan");
+              setSampleTried(true);
+            }}
+          >
+            <RotateCcw className="h-4 w-4" /> Sıfırla
+          </Button>
+          <Link href="/history">
+            <Button variant="ghost" size="sm" className="gap-1.5">
+              <HistoryIcon className="h-4 w-4" /> Geçmiş
+            </Button>
+          </Link>
+          {user?.role === "super_admin" && (
+            <Link href="/admin">
+              <Button variant="ghost" size="sm" className="gap-1.5">
+                <ShieldCheck className="h-4 w-4" /> Yönetim
+              </Button>
+            </Link>
+          )}
+          {user && (
+            <div className="flex items-center gap-2 border-l pl-2">
+              <div className="hidden text-right leading-tight sm:block">
+                <p className="text-xs font-medium">{user.email}</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {user.status === "active"
+                    ? user.role === "super_admin"
+                      ? "Süper Admin"
+                      : "Üye"
+                    : user.status === "pending"
+                      ? "Onay bekliyor"
+                      : "Pasif"}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                onClick={logout}
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Çıkış</span>
+              </Button>
+            </div>
+          )}
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1">

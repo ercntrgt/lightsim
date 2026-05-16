@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { LandingAuthButtons } from "@/components/auth/LandingAuthButtons";
 
 const FEATURES = [
   {
@@ -71,11 +72,7 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <Link href="/studio">
-            <Button size="sm" className="gap-2">
-              Stüdyoya Git <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+          <LandingAuthButtons />
         </div>
       </header>
 

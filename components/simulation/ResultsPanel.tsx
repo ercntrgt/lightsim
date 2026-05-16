@@ -5,6 +5,7 @@ import { Play, Loader2, Activity, Download, Share2 } from "lucide-react";
 import { useProjectStore } from "@/stores/projectStore";
 import { useSimulationStore } from "@/stores/simulationStore";
 import { runSimulationInWorker } from "@/lib/workers/client";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -46,6 +47,8 @@ function Metric({
 
 export function ResultsPanel() {
   const { error, success } = useToast();
+  const { user } = useAuth();
+  const canAnalyze = user?.status === "active";
   const room = useProjectStore((s) => s.room);
   const fixtures = useProjectStore((s) => s.fixtures);
   const location = useProjectStore((s) => s.location);
@@ -64,7 +67,35 @@ export function ResultsPanel() {
   const [target, setTarget] = useState("office");
   const [busy, setBusy] = useState<"pdf" | "share" | null>(null);
 
+  const saveHistory = async (r: typeof result) => {
+    if (!room || !r) return;
+    try {
+      const res = await fetch("/api/simulations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName,
+          room,
+          fixtures,
+          location,
+          settings,
+          result: r,
+        }),
+      });
+      if (res.ok) success("Geçmişe kaydedildi");
+    } catch {
+      /* geçmiş kaydı başarısız — simülasyon yine de gösterilir */
+    }
+  };
+
   const calculate = async () => {
+    if (!canAnalyze)
+      return error(
+        "Yetki yok",
+        user
+          ? "Üyeliğiniz onay bekliyor — analiz yapamazsınız."
+          : "Analiz için giriş yapın."
+      );
     if (!room) return error("Oda yok", "Önce odayı oluşturun.");
     if (fixtures.length === 0 && !settings.includeDaylight)
       return error("Kaynak yok", "Armatür ekleyin veya günışığını açın.");
@@ -75,6 +106,7 @@ export function ResultsPanel() {
         (f) => setProgress(f)
       );
       setResult(r);
+      saveHistory(r);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Hesaplama hatası";
       fail(msg);
@@ -200,9 +232,17 @@ export function ResultsPanel() {
         </div>
       </div>
 
+      {!canAnalyze && (
+        <p className="rounded-md bg-amber-500/10 p-2 text-xs text-amber-700">
+          {user
+            ? "Üyeliğiniz süper admin onayı bekliyor. Onaylandıktan sonra analiz yapabilir ve sonuçlar geçmişinize kaydedilir."
+            : "Analiz yapmak için giriş yapmalısınız."}
+        </p>
+      )}
+
       <Button
         onClick={calculate}
-        disabled={running || !room}
+        disabled={running || !room || !canAnalyze}
         className="w-full gap-2"
         size="lg"
       >

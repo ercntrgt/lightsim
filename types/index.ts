@@ -203,6 +203,45 @@ export interface ProjectState {
   settings: SimulationSettings;
 }
 
+// ——— Üyelik / kimlik doğrulama ———
+
+export type UserRole = "super_admin" | "member";
+export type UserStatus = "pending" | "active" | "rejected";
+
+/** İstemciye dönen güvenli kullanıcı (password_hash hariç). */
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  status: UserStatus;
+  createdAt: number;
+  approvedAt: number | null;
+}
+
+/** Geçmiş listesinde gösterilen özet metrikler. */
+export interface SimulationSummary {
+  fileName: string | null;
+  area: number;
+  fixtureCount: number;
+  avg: number;
+  min: number;
+  max: number;
+  uniformityUo: number;
+  daylightFactorPct: number;
+}
+
+/** Bir kullanıcının kayıtlı simülasyon geçmişi kaydı. */
+export interface SimulationRecord {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  createdAt: number;
+  summary: SimulationSummary;
+  /** Tam geri yükleme için (özet + tam proje). */
+  project: SharedProject;
+}
+
 /** Paylaşım linkine gömülen küçültülmüş proje (ham DXF entity'leri hariç). */
 export interface SharedProject {
   fileName: string | null;
