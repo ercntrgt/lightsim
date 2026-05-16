@@ -65,3 +65,201 @@
   height: 100%;
   background: hsl(var(--muted));
 }
+
+/* ============================================================
+   "Karanlıktan Aydınlığa" — anasayfa açılış/reveal koreografisi
+   Yalnız transform/opacity (GPU, CLS yok). JS yoksa içerik görünür.
+   ============================================================ */
+
+@keyframes lsAtmoRise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 7%, 0) scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes lsSkyFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lsBeam {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -10%, 0) scaleY(0.6);
+  }
+  55% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0.34;
+    transform: translate3d(0, 0, 0) scaleY(1);
+  }
+}
+
+@keyframes lsSunGlow {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes lsRevealUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 30px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Sahne tabanı (koyu atmosfer) */
+.ls-stage {
+  background-color: #070b14;
+}
+
+/* Atmosfer katmanları — son (aydınlık) durum varsayılan; keyframe
+   bu duruma DOĞRU oynar, böylece animasyon devre dışıyken de aydınlık. */
+.ls-atmo-root {
+  --ls-mx: 0;
+  --ls-my: 0;
+}
+
+.ls-base {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      120% 90% at 50% 115%,
+      rgba(8, 12, 22, 0) 0%,
+      #070b14 70%
+    ),
+    #060912;
+}
+
+.ls-sky {
+  position: absolute;
+  inset: 0;
+  opacity: 1;
+  background:
+    radial-gradient(
+      90% 60% at 50% -10%,
+      rgba(56, 132, 197, 0.22) 0%,
+      rgba(56, 132, 197, 0) 60%
+    );
+  animation: lsSkyFade 1700ms ease-out both;
+}
+
+.ls-sun {
+  position: absolute;
+  inset: 0;
+  opacity: 1;
+  background:
+    radial-gradient(
+      70% 55% at 50% 108%,
+      rgba(251, 191, 36, 0.5) 0%,
+      rgba(245, 158, 11, 0.28) 26%,
+      rgba(120, 53, 15, 0.12) 50%,
+      rgba(7, 11, 20, 0) 72%
+    );
+  animation:
+    lsAtmoRise 1900ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    lsSunGlow 7s ease-in-out 2s infinite;
+  transform-origin: 50% 100%;
+}
+
+/* Işık huzmeleri (god rays) — fare ile hafif paralaks veren sarmal içinde */
+.ls-parallax {
+  position: absolute;
+  inset: -8%;
+  transform: translate3d(
+    calc(var(--ls-mx) * 20px),
+    calc(var(--ls-my) * 14px),
+    0
+  );
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.ls-beam {
+  position: absolute;
+  top: -25%;
+  left: 50%;
+  width: 16vw;
+  height: 150%;
+  border-radius: 50%;
+  filter: blur(40px);
+  opacity: 0.34;
+  background: linear-gradient(
+    180deg,
+    rgba(254, 240, 199, 0) 0%,
+    rgba(253, 224, 152, 0.5) 45%,
+    rgba(251, 191, 36, 0.2) 75%,
+    rgba(251, 191, 36, 0) 100%
+  );
+  transform-origin: 50% 0;
+  animation: lsBeam 2200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ls-beam-1 {
+  margin-left: -34vw;
+  rotate: 16deg;
+  animation-delay: 250ms;
+}
+.ls-beam-2 {
+  margin-left: -8vw;
+  rotate: -7deg;
+  width: 22vw;
+  animation-delay: 480ms;
+}
+.ls-beam-3 {
+  margin-left: 22vw;
+  rotate: 24deg;
+  width: 13vw;
+  animation-delay: 700ms;
+}
+
+.ls-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    100% 100% at 50% 35%,
+    rgba(7, 11, 20, 0) 55%,
+    rgba(5, 8, 16, 0.55) 100%
+  );
+}
+
+/* İçerik reveal — varsayılan gizli, keyframe görünür kılar (fill: both).
+   Gecikme satır içi style.animationDelay ile verilir (stagger). */
+.ls-reveal {
+  opacity: 0;
+  animation: lsRevealUp 950ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ls-sky,
+  .ls-sun,
+  .ls-beam,
+  .ls-reveal {
+    animation: none !important;
+  }
+  .ls-reveal {
+    opacity: 1;
+    transform: none;
+  }
+  .ls-parallax {
+    transition: none;
+  }
+}
